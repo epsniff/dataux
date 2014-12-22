@@ -1,14 +1,16 @@
 package proxy
 
 import (
+	"github.com/araddon/dataux/config"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/mixer/config"
 
 	"net"
 	"runtime"
 	"strings"
 )
 
+// Server is the Proxy-Server, that fronts the backends(nodes)
+//
 type Server struct {
 	cfg *config.Config
 

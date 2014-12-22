@@ -3,7 +3,7 @@ package client
 import (
 	"container/list"
 	"fmt"
-	. "github.com/siddontang/mixer/mysql"
+	"github.com/araddon/dataux/plugins/mysql"
 	"sync"
 	"sync/atomic"
 )
@@ -116,8 +116,8 @@ func (db *DB) tryReuse(co *Conn) error {
 
 	//connection may be set names early
 	//we must use default utf8
-	if co.GetCharset() != DEFAULT_CHARSET {
-		if err := co.SetCharset(DEFAULT_CHARSET); err != nil {
+	if co.GetCharset() != mysql.DEFAULT_CHARSET {
+		if err := co.SetCharset(mysql.DEFAULT_CHARSET); err != nil {
 			return err
 		}
 	}

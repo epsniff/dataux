@@ -1,9 +1,13 @@
 package proxy
 
 import (
+	"github.com/siddontang/go-log/log"
 	"testing"
 )
 
+func init() {
+	log.SetLevel(log.LevelDebug)
+}
 func TestStmt_DropTable(t *testing.T) {
 	server := newTestServer(t)
 	n := server.nodes["node1"]
@@ -37,6 +41,7 @@ func TestStmt_CreateTable(t *testing.T) {
 	}
 
 	c.UseDB("mixer")
+	log.Info("hello:  %v", c)
 	defer c.Close()
 	if _, err := c.Execute(str); err != nil {
 		t.Fatal(err)

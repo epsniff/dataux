@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"github.com/araddon/dataux/client"
+	"github.com/araddon/dataux/hack"
+	. "github.com/araddon/dataux/plugins/mysql"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/mixer/client"
-	"github.com/siddontang/mixer/hack"
-	. "github.com/siddontang/mixer/mysql"
 	"net"
 	"runtime"
 	"sync"
@@ -312,6 +312,7 @@ func (c *Conn) dispatch(data []byte) error {
 }
 
 func (c *Conn) useDB(db string) error {
+	log.Info("UseDB: %v", db)
 	if s := c.server.getSchema(db); s == nil {
 		return NewDefaultError(ER_BAD_DB_ERROR, db)
 	} else {

@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/siddontang/mixer/sqltypes"
+	"github.com/araddon/dataux/sqltypes"
 )
 
 type BindLocation struct {

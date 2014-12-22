@@ -2,14 +2,19 @@ package client
 
 import (
 	"fmt"
-	. "github.com/siddontang/mixer/mysql"
+	"github.com/araddon/dataux/plugins/mysql"
+	u "github.com/araddon/gou"
 	"testing"
 )
 
+func init() {
+	u.SetupLogging("debug")
+	u.SetColorOutput()
+}
 func newTestConn() *Conn {
 	c := new(Conn)
 
-	if err := c.Connect("127.0.0.1:3306", "root", "", "mixer"); err != nil {
+	if err := c.Connect("localhost:3307", "mixer", "", "mixer"); err != nil {
 		panic(err)
 	}
 
@@ -122,8 +127,7 @@ func TestConn_Escape(t *testing.T) {
 	defer c.Close()
 
 	e := `""''\abc`
-	s := fmt.Sprintf(`insert into mixer_test_conn (id, str) values(5, "%s")`,
-		Escape(e))
+	s := fmt.Sprintf(`insert into mixer_test_conn (id, str) values(5, "%s")`, mysql.Escape(e))
 
 	if _, err := c.Execute(s); err != nil {
 		t.Fatal(err)

@@ -2,10 +2,10 @@ package proxy
 
 import (
 	"fmt"
+	"github.com/araddon/dataux/hack"
+	. "github.com/araddon/dataux/plugins/mysql"
+	"github.com/araddon/dataux/sqlparser"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/mixer/hack"
-	. "github.com/siddontang/mixer/mysql"
-	"github.com/siddontang/mixer/sqlparser"
 	"sort"
 	"strings"
 	"time"

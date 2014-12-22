@@ -2,10 +2,10 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/siddontang/mixer/client"
-	"github.com/siddontang/mixer/hack"
-	. "github.com/siddontang/mixer/mysql"
-	"github.com/siddontang/mixer/sqlparser"
+	"github.com/araddon/dataux/client"
+	"github.com/araddon/dataux/hack"
+	. "github.com/araddon/dataux/plugins/mysql"
+	"github.com/araddon/dataux/sqlparser"
 	"strconv"
 	"strings"
 	"sync"
@@ -123,7 +123,7 @@ func (c *Conn) getConn(n *Node, isSelect bool) (co *client.SqlConn, err error) {
 	return
 }
 
-func (c *Conn) getShardConns(isSelect bool,stmt sqlparser.Statement, bindVars map[string]interface{}) ([]*client.SqlConn, error) {
+func (c *Conn) getShardConns(isSelect bool, stmt sqlparser.Statement, bindVars map[string]interface{}) ([]*client.SqlConn, error) {
 	nodes, err := c.getShardList(stmt, bindVars)
 	if err != nil {
 		return nil, err
@@ -236,7 +236,7 @@ func makeBindVars(args []interface{}) map[string]interface{} {
 func (c *Conn) handleSelect(stmt *sqlparser.Select, sql string, args []interface{}) error {
 	bindVars := makeBindVars(args)
 
-	conns, err := c.getShardConns(true,stmt, bindVars)
+	conns, err := c.getShardConns(true, stmt, bindVars)
 	if err != nil {
 		return err
 	} else if conns == nil {
@@ -288,7 +288,7 @@ func (c *Conn) commitShardConns(conns []*client.SqlConn) error {
 func (c *Conn) handleExec(stmt sqlparser.Statement, sql string, args []interface{}) error {
 	bindVars := makeBindVars(args)
 
-	conns, err := c.getShardConns(false,stmt, bindVars)
+	conns, err := c.getShardConns(false, stmt, bindVars)
 	if err != nil {
 		return err
 	} else if conns == nil {

@@ -3,9 +3,13 @@ package mysql
 import (
 	"bufio"
 	"fmt"
+	u "github.com/araddon/gou"
 	"io"
 	"net"
+	"time"
 )
+
+var _ = u.EMPTY
 
 type PacketIO struct {
 	rb *bufio.Reader
@@ -28,34 +32,51 @@ func NewPacketIO(conn net.Conn) *PacketIO {
 func (p *PacketIO) ReadPacket() ([]byte, error) {
 	header := []byte{0, 0, 0, 0}
 
+	defer func() {
+		if r := recover(); r != nil {
+			u.Errorf("w???  %v", r)
+			time.Sleep(time.Millisecond * 100)
+		}
+	}()
+	u.Infof("read full")
+	//panic("wtf")
 	if _, err := io.ReadFull(p.rb, header); err != nil {
+		u.Errorf("read problem? %v", err)
 		return nil, ErrBadConn
 	}
 
+	u.Infof("header:  %v %v", len(header), string(header))
 	length := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
 	if length < 1 {
+		u.Warnf("invalid payload length?:  %v", length)
 		return nil, fmt.Errorf("invalid payload length %d", length)
 	}
 
 	sequence := uint8(header[3])
 
 	if sequence != p.Sequence {
+		u.Error("err invalid sequentce")
 		return nil, fmt.Errorf("invalid sequence %d != %d", sequence, p.Sequence)
 	}
 
 	p.Sequence++
 
 	data := make([]byte, length)
+
+	u.Infof("data:  %v", string(data))
 	if _, err := io.ReadFull(p.rb, data); err != nil {
+		u.Errorf("err: %v", err)
 		return nil, ErrBadConn
 	} else {
 		if length < MaxPayloadLen {
+			u.Errorf("got good data? %v", string(data))
 			return data, nil
 		}
 
 		var buf []byte
 		buf, err = p.ReadPacket()
 		if err != nil {
+			u.Errorf("bad conn? %v", err)
 			return nil, ErrBadConn
 		} else {
 			return append(data, buf...), nil

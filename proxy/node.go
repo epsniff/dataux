@@ -2,9 +2,9 @@ package proxy
 
 import (
 	"fmt"
+	"github.com/araddon/dataux/client"
+	"github.com/araddon/dataux/config"
 	"github.com/siddontang/go-log/log"
-	"github.com/siddontang/mixer/client"
-	"github.com/siddontang/mixer/config"
 	"sync"
 	"time"
 )
@@ -14,6 +14,7 @@ const (
 	Slave  = "slave"
 )
 
+// Node represents a Server/Service for a backend
 type Node struct {
 	sync.Mutex
 
@@ -64,7 +65,7 @@ func (n *Node) getMasterConn() (*client.SqlConn, error) {
 	if db == nil {
 		return nil, fmt.Errorf("master is down")
 	}
-
+	log.Debug("about to GetConn:   client.SqlConn")
 	return db.GetConn()
 }
 

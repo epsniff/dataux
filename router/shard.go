@@ -6,7 +6,7 @@ package router
 
 import (
 	"fmt"
-	"github.com/siddontang/mixer/hack"
+	"github.com/araddon/dataux/hack"
 	"hash/crc32"
 	"strconv"
 )

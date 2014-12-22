@@ -1,8 +1,8 @@
 package proxy
 
 import (
-	"github.com/siddontang/mixer/client"
-	"github.com/siddontang/mixer/config"
+	"github.com/araddon/dataux/client"
+	"github.com/araddon/dataux/config"
 	"sync"
 	"testing"
 	"time"
@@ -26,7 +26,7 @@ nodes :
     rw_split: false
     user: root
     password:
-    master : 127.0.0.1:3306
+    master : localhost:3307
     slave : 
 - 
     name : node2
@@ -35,7 +35,7 @@ nodes :
     rw_split: false
     user: root
     password:
-    master : 127.0.0.1:3307
+    master : localhost:3308
 
 - 
     name : node3 
@@ -44,7 +44,7 @@ nodes :
     rw_split: false
     user: root
     password:
-    master : 127.0.0.1:3308
+    master : localhost:3309
 
 schemas :
 -

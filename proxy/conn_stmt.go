@@ -3,8 +3,8 @@ package proxy
 import (
 	"encoding/binary"
 	"fmt"
-	. "github.com/siddontang/mixer/mysql"
-	"github.com/siddontang/mixer/sqlparser"
+	. "github.com/araddon/dataux/plugins/mysql"
+	"github.com/araddon/dataux/sqlparser"
 	"math"
 	"strconv"
 	"strings"

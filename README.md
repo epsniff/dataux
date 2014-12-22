@@ -25,9 +25,9 @@ Mixer is a MySQL proxy powered by Go which aims to supply a simple solution for 
 ## Install 
 
     cd $WORKSPACE
-    git clone git@github.com:siddontang/mixer.git src/github.com/siddontang/mixer
+    git clone git@github.com:siddontang/mixer.git src/github.com/araddon/dataux
     
-    cd src/github.com/siddontang/mixer
+    cd src/github.com/araddon/dataux
 
     ./bootstrap.sh
 

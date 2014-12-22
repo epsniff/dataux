@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/siddontang/mixer/hack"
+	"github.com/araddon/dataux/hack"
 )
 
 var (

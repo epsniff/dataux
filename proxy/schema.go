@@ -2,9 +2,11 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/siddontang/mixer/router"
+	"github.com/araddon/dataux/router"
 )
 
+// Schema is the schema for a named database, shared
+// across multiple nodes
 type Schema struct {
 	db string
 
