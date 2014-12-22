@@ -9,6 +9,7 @@ import (
 )
 
 func (c *Conn) handleSimpleSelect(sql string, stmt *sqlparser.SimpleSelect) error {
+
 	if len(stmt.SelectExprs) != 1 {
 		return fmt.Errorf("support select one informaction function, %s", sql)
 	}

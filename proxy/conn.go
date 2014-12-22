@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/araddon/dataux/client"
 	"github.com/araddon/dataux/hack"
-	. "github.com/araddon/dataux/plugins/mysql"
+	"github.com/araddon/dataux/plugins/mysql"
 	"github.com/siddontang/go-log/log"
 	"net"
 	"runtime"
@@ -14,15 +14,15 @@ import (
 	"sync/atomic"
 )
 
-var DEFAULT_CAPABILITY uint32 = CLIENT_LONG_PASSWORD | CLIENT_LONG_FLAG |
-	CLIENT_CONNECT_WITH_DB | CLIENT_PROTOCOL_41 |
-	CLIENT_TRANSACTIONS | CLIENT_SECURE_CONNECTION
+var DEFAULT_CAPABILITY uint32 = mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_LONG_FLAG |
+	mysql.CLIENT_CONNECT_WITH_DB | mysql.CLIENT_PROTOCOL_41 |
+	mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_SECURE_CONNECTION
 
 //client <-> proxy
 type Conn struct {
 	sync.Mutex
 
-	pkg *PacketIO
+	pkg *mysql.PacketIO
 
 	c net.Conn
 
@@ -33,7 +33,7 @@ type Conn struct {
 	connectionId uint32
 
 	status    uint16
-	collation CollationId
+	collation mysql.CollationId
 	charset   string
 
 	user string
@@ -62,7 +62,7 @@ func (s *Server) newConn(co net.Conn) *Conn {
 
 	c.c = co
 
-	c.pkg = NewPacketIO(co)
+	c.pkg = mysql.NewPacketIO(co)
 
 	c.server = s
 
@@ -71,16 +71,16 @@ func (s *Server) newConn(co net.Conn) *Conn {
 
 	c.connectionId = atomic.AddUint32(&baseConnId, 1)
 
-	c.status = SERVER_STATUS_AUTOCOMMIT
+	c.status = mysql.SERVER_STATUS_AUTOCOMMIT
 
-	c.salt, _ = RandomBuf(20)
+	c.salt, _ = mysql.RandomBuf(20)
 
 	c.txConns = make(map[*Node]*client.SqlConn)
 
 	c.closed = false
 
-	c.collation = DEFAULT_COLLATION_ID
-	c.charset = DEFAULT_CHARSET
+	c.collation = mysql.DEFAULT_COLLATION_ID
+	c.charset = mysql.DEFAULT_CHARSET
 
 	c.stmtId = 0
 	c.stmts = make(map[uint32]*Stmt)
@@ -133,7 +133,7 @@ func (c *Conn) writeInitialHandshake() error {
 	data = append(data, 10)
 
 	//server version[00]
-	data = append(data, ServerVersion...)
+	data = append(data, mysql.ServerVersion...)
 	data = append(data, 0)
 
 	//connection id
@@ -149,7 +149,7 @@ func (c *Conn) writeInitialHandshake() error {
 	data = append(data, byte(DEFAULT_CAPABILITY), byte(DEFAULT_CAPABILITY>>8))
 
 	//charset, utf-8 default
-	data = append(data, uint8(DEFAULT_COLLATION_ID))
+	data = append(data, uint8(mysql.DEFAULT_COLLATION_ID))
 
 	//status
 	data = append(data, byte(c.status), byte(c.status>>8))
@@ -213,15 +213,15 @@ func (c *Conn) readHandshakeResponse() error {
 	pos++
 	auth := data[pos : pos+authLen]
 
-	checkAuth := CalcPassword(c.salt, []byte(c.server.cfg.Password))
+	checkAuth := mysql.CalcPassword(c.salt, []byte(c.server.cfg.Password))
 
 	if !bytes.Equal(auth, checkAuth) {
-		return NewDefaultError(ER_ACCESS_DENIED_ERROR, c.c.RemoteAddr().String(), c.user, "Yes")
+		return mysql.NewDefaultError(mysql.ER_ACCESS_DENIED_ERROR, c.c.RemoteAddr().String(), c.user, "Yes")
 	}
 
 	pos += authLen
 
-	if c.capability|CLIENT_CONNECT_WITH_DB > 0 {
+	if c.capability|mysql.CLIENT_CONNECT_WITH_DB > 0 {
 		if len(data[pos:]) == 0 {
 			return nil
 		}
@@ -237,6 +237,8 @@ func (c *Conn) readHandshakeResponse() error {
 	return nil
 }
 
+// Run is a blocking command PER client connection
+//
 func (c *Conn) Run() {
 	defer func() {
 		r := recover()
@@ -260,7 +262,7 @@ func (c *Conn) Run() {
 
 		if err := c.dispatch(data); err != nil {
 			log.Error("dispatch error %s", err.Error())
-			if err != ErrBadConn {
+			if err != mysql.ErrBadConn {
 				c.writeError(err)
 			}
 		}
@@ -278,34 +280,34 @@ func (c *Conn) dispatch(data []byte) error {
 	data = data[1:]
 
 	switch cmd {
-	case COM_QUIT:
+	case mysql.COM_QUIT:
 		c.Close()
 		return nil
-	case COM_QUERY:
+	case mysql.COM_QUERY:
 		return c.handleQuery(hack.String(data))
-	case COM_PING:
+	case mysql.COM_PING:
 		return c.writeOK(nil)
-	case COM_INIT_DB:
+	case mysql.COM_INIT_DB:
 		if err := c.useDB(hack.String(data)); err != nil {
 			return err
 		} else {
 			return c.writeOK(nil)
 		}
-	case COM_FIELD_LIST:
+	case mysql.COM_FIELD_LIST:
 		return c.handleFieldList(data)
-	case COM_STMT_PREPARE:
+	case mysql.COM_STMT_PREPARE:
 		return c.handleStmtPrepare(hack.String(data))
-	case COM_STMT_EXECUTE:
+	case mysql.COM_STMT_EXECUTE:
 		return c.handleStmtExecute(data)
-	case COM_STMT_CLOSE:
+	case mysql.COM_STMT_CLOSE:
 		return c.handleStmtClose(data)
-	case COM_STMT_SEND_LONG_DATA:
+	case mysql.COM_STMT_SEND_LONG_DATA:
 		return c.handleStmtSendLongData(data)
-	case COM_STMT_RESET:
+	case mysql.COM_STMT_RESET:
 		return c.handleStmtReset(data)
 	default:
 		msg := fmt.Sprintf("command %d not supported now", cmd)
-		return NewError(ER_UNKNOWN_ERROR, msg)
+		return mysql.NewError(mysql.ER_UNKNOWN_ERROR, msg)
 	}
 
 	return nil
@@ -314,7 +316,7 @@ func (c *Conn) dispatch(data []byte) error {
 func (c *Conn) useDB(db string) error {
 	log.Info("UseDB: %v", db)
 	if s := c.server.getSchema(db); s == nil {
-		return NewDefaultError(ER_BAD_DB_ERROR, db)
+		return mysql.NewDefaultError(mysql.ER_BAD_DB_ERROR, db)
 	} else {
 		c.schema = s
 		c.db = db
@@ -322,18 +324,18 @@ func (c *Conn) useDB(db string) error {
 	return nil
 }
 
-func (c *Conn) writeOK(r *Result) error {
+func (c *Conn) writeOK(r *mysql.Result) error {
 	if r == nil {
-		r = &Result{Status: c.status}
+		r = &mysql.Result{Status: c.status}
 	}
 	data := make([]byte, 4, 32)
 
-	data = append(data, OK_HEADER)
+	data = append(data, mysql.OK_HEADER)
 
-	data = append(data, PutLengthEncodedInt(r.AffectedRows)...)
-	data = append(data, PutLengthEncodedInt(r.InsertId)...)
+	data = append(data, mysql.PutLengthEncodedInt(r.AffectedRows)...)
+	data = append(data, mysql.PutLengthEncodedInt(r.InsertId)...)
 
-	if c.capability&CLIENT_PROTOCOL_41 > 0 {
+	if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
 		data = append(data, byte(r.Status), byte(r.Status>>8))
 		data = append(data, 0, 0)
 	}
@@ -342,18 +344,18 @@ func (c *Conn) writeOK(r *Result) error {
 }
 
 func (c *Conn) writeError(e error) error {
-	var m *SqlError
+	var m *mysql.SqlError
 	var ok bool
-	if m, ok = e.(*SqlError); !ok {
-		m = NewError(ER_UNKNOWN_ERROR, e.Error())
+	if m, ok = e.(*mysql.SqlError); !ok {
+		m = mysql.NewError(mysql.ER_UNKNOWN_ERROR, e.Error())
 	}
 
 	data := make([]byte, 4, 16+len(m.Message))
 
-	data = append(data, ERR_HEADER)
+	data = append(data, mysql.ERR_HEADER)
 	data = append(data, byte(m.Code), byte(m.Code>>8))
 
-	if c.capability&CLIENT_PROTOCOL_41 > 0 {
+	if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
 		data = append(data, '#')
 		data = append(data, m.State...)
 	}
@@ -366,8 +368,8 @@ func (c *Conn) writeError(e error) error {
 func (c *Conn) writeEOF(status uint16) error {
 	data := make([]byte, 4, 9)
 
-	data = append(data, EOF_HEADER)
-	if c.capability&CLIENT_PROTOCOL_41 > 0 {
+	data = append(data, mysql.EOF_HEADER)
+	if c.capability&mysql.CLIENT_PROTOCOL_41 > 0 {
 		data = append(data, 0, 0)
 		data = append(data, byte(status), byte(status>>8))
 	}
