@@ -234,6 +234,7 @@ func makeBindVars(args []interface{}) map[string]interface{} {
 }
 
 func (c *Conn) handleSelect(stmt *sqlparser.Select, sql string, args []interface{}) error {
+
 	bindVars := makeBindVars(args)
 
 	conns, err := c.getShardConns(true, stmt, bindVars)

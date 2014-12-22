@@ -41,7 +41,7 @@ func TestStmt_CreateTable(t *testing.T) {
 	}
 
 	c.UseDB("mixer")
-	log.Info("hello:  %v", c)
+	u.Infof("hello:  %v", c)
 	defer c.Close()
 	if _, err := c.Execute(str); err != nil {
 		t.Fatal(err)

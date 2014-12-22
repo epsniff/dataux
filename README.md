@@ -1,6 +1,7 @@
-# Mixer
+# DataUX
 
-Mixer is a MySQL proxy powered by Go which aims to supply a simple solution for MySQL sharding.
+DataUX is a MySQL proxy powered by Go which proxies traffic to multiple backends
+Elasticsearch, Mysql, ??.   
 
 ## Features
 
@@ -11,92 +12,13 @@ Mixer is a MySQL proxy powered by Go which aims to supply a simple solution for 
 - Basic SQL Routing
 - Supports prepared statement: `COM_STMT_PREPARE`, `COM_STMT_EXECUTE`, etc. 
 
-## TODO
 
-- Some admin commands
-- Some show command support, i.e. ```show databases```, etc.
-- Some select system variable, i.e. ```select @@version```, etc.
-- Enhance routing rules
-- Monitor
-- SQL validation check
-- Statistics
-- Many other things ...
-
-## Install 
-
-    cd $WORKSPACE
-    git clone git@github.com:siddontang/mixer.git src/github.com/araddon/dataux
-    
-    cd src/github.com/araddon/dataux
-
-    ./bootstrap.sh
-
-    . ./dev.env
-
-    make
-    make test
 
 ## Keywords
 
-### proxy
-
-A proxy is the bridge connecting clients and the real MySQL servers. 
-
-It acts as a MySQL server too, clients can communicate with it using the MySQL procotol.
-
-### node
-
-Mixer uses nodes to represent the real remote MySQL servers. A node can have two MySQL servers:
-
-+ master: main MySQL server, all write operations, read operations (if ```rw_split``` and slave are not set) will be executed here.
-All transactions will be executed here too.
-+ slave: if ```rw_split``` is set, any select operations will be executed here. (can not set)
-
-Notice:
-
-+ You can use ```admin upnode``` or ```admin downnode``` commands to bring a specified MySQL server up or down.
-+ If the master was down, you must use an admin command to bring it up manually.
-+ You must set up MySQL replication for yourself, mixer does not do it.
-
-### schema
-
-Schema likes MySQL database, if a client executes ```use db``` command, ```db``` must exist in the schema.
-
-A schema contains one or more nodes. If a client use the specified schema, any command will be only routed to the node which belongs to the schema to be executed.
-
-### rule
-
-You must set some rules for a schema to let the mixer decide how to route SQL statements to different nodes to be executed.
-
-Mixer uses ```table + key``` to route. Duplicate rule for a table are not allowed. 
-
-When SQL needs to be routed, mixer does the following steps:
-
-+ Parse SQL and find the table operated on
-+ If there are no rule for the table, mixer use the default rule
-+ If a rule exists, mixer tries to route it with the specified key
-
-Rules have three types: default, hash and range.
-
-A schema must have a default rule with only one node assigned. 
-
-For hash and range routing you can see the example below.
-
-## admin commands
-
-Mixer suplies `admin` statement to administrate. The `admin` format is `admin func(arg, ...)` like `select func(arg,...)`. Later we may add admin password for safe use.
-
-Support admin functions now:
-
-    - admin upnode(node, serverype, addr);
-    - admin downnode(node, servertype);
-    - show proxy config;
-
-## Base Example
-
 ```
-#start mixer
-mixer-proxy -config=/etc/mixer.conf
+#start dataux
+dataux -config=/etc/mixer.conf
 
 #another shell
 mysql -uroot -h127.0.0.1 -P4000 -p -Dmixer

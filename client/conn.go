@@ -74,30 +74,30 @@ func (c *Conn) ReConnect() error {
 	u.Infof("about to dial db: %v", c.addr)
 	netConn, err := net.Dial(n, c.addr)
 	if err != nil {
-		log.Error("error: %v", err)
+		u.Errorf("error: %v", err)
 		return err
 	}
 
 	c.conn = netConn
 	c.pkg = mysql.NewPacketIO(netConn)
 
-	log.Info("calling initial handshake")
+	u.Infof("calling initial handshake")
 	if err := c.readInitialHandshake(); err != nil {
-		log.Error("error: %v", err)
+		u.Errorf("error: %v", err)
 		c.conn.Close()
 		return err
 	}
 
 	u.Infof("calling auth handshake")
 	if err := c.writeAuthHandshake(); err != nil {
-		log.Error("error: %v", err)
+		u.Errorf("error: %v", err)
 		c.conn.Close()
 
 		return err
 	}
 	u.Infof("get ok")
 	if _, err := c.readOK(); err != nil {
-		log.Error("error: %v", err)
+		u.Errorf("error: %v", err)
 		c.conn.Close()
 
 		return err
@@ -108,7 +108,7 @@ func (c *Conn) ReConnect() error {
 	if !c.IsAutoCommit() {
 		if _, err := c.exec("set autocommit = 1"); err != nil {
 			c.conn.Close()
-			log.Error("error: %v", err)
+			u.Errorf("error: %v", err)
 			return err
 		}
 	}
@@ -147,12 +147,12 @@ func (c *Conn) readInitialHandshake() error {
 	}
 
 	if data[0] == mysql.ERR_HEADER {
-		log.Error("error reading handshake")
+		u.Errorf("error reading handshake")
 		return errors.New("read initial handshake error")
 	}
 
 	if data[0] < mysql.MinProtocolVersion {
-		log.Error("error reading protocol version")
+		u.Errorf("error reading protocol version")
 		return fmt.Errorf("invalid protocol version %d, must >= 10", data[0])
 	}
 
@@ -365,12 +365,12 @@ func (c *Conn) UseDB(dbName string) error {
 
 	log.Debug("about to writeCommandStr:  %v %v %v", c.addr, c.db, dbName)
 	if err := c.writeCommandStr(mysql.COM_INIT_DB, dbName); err != nil {
-		log.Error("error: %v", err)
+		u.Errorf("error: %v", err)
 		return err
 	}
 
 	if _, err := c.readOK(); err != nil {
-		log.Error("error: %v", err)
+		u.Errorf("error: %v", err)
 		return err
 	}
 

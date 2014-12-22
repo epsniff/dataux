@@ -2,7 +2,7 @@ package proxy
 
 import (
 	"github.com/araddon/dataux/config"
-	"github.com/siddontang/go-log/log"
+	u "github.com/araddon/gou"
 
 	"net"
 	"runtime"
@@ -28,6 +28,7 @@ type Server struct {
 }
 
 func NewServer(cfg *config.Config) (*Server, error) {
+
 	s := new(Server)
 
 	s.cfg = cfg
@@ -55,7 +56,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 		return nil, err
 	}
 
-	log.Info("Server run MySql Protocol Listen(%s) at [%s]", netProto, s.addr)
+	u.Infof("Server run MySql Protocol Listen(%s) at [%s]", netProto, s.addr)
 	return s, nil
 }
 
@@ -65,7 +66,7 @@ func (s *Server) Run() error {
 	for s.running {
 		conn, err := s.listener.Accept()
 		if err != nil {
-			log.Error("accept error %s", err.Error())
+			u.Errorf("accept error %s", err.Error())
 			continue
 		}
 
@@ -83,6 +84,7 @@ func (s *Server) Close() {
 }
 
 func (s *Server) onConn(c net.Conn) {
+
 	conn := s.newConn(c)
 
 	defer func() {
@@ -90,14 +92,15 @@ func (s *Server) onConn(c net.Conn) {
 			const size = 4096
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
-			log.Error("onConn panic %v: %v\n%s", c.RemoteAddr().String(), err, buf)
+			u.Errorf("onConn panic %v: %v\n%s", c.RemoteAddr().String(), err, buf)
 		}
 
 		conn.Close()
 	}()
 
+	u.Infof("client connected")
 	if err := conn.Handshake(); err != nil {
-		log.Error("handshake error %s", err.Error())
+		u.Errorf("handshake error %s", err.Error())
 		c.Close()
 		return
 	}

@@ -7,7 +7,7 @@ import (
 	"github.com/araddon/dataux/client"
 	"github.com/araddon/dataux/hack"
 	"github.com/araddon/dataux/plugins/mysql"
-	"github.com/siddontang/go-log/log"
+	u "github.com/araddon/gou"
 	"net"
 	"runtime"
 	"sync"
@@ -89,13 +89,14 @@ func (s *Server) newConn(co net.Conn) *Conn {
 }
 
 func (c *Conn) Handshake() error {
+
 	if err := c.writeInitialHandshake(); err != nil {
-		log.Error("send initial handshake error %s", err.Error())
+		u.Errorf("send initial handshake error %s", err.Error())
 		return err
 	}
 
 	if err := c.readHandshakeResponse(); err != nil {
-		log.Error("recv handshake response error %s", err.Error())
+		u.Errorf("recv handshake response error %s", err.Error())
 
 		c.writeError(err)
 
@@ -103,7 +104,7 @@ func (c *Conn) Handshake() error {
 	}
 
 	if err := c.writeOK(nil); err != nil {
-		log.Error("write ok fail %s", err.Error())
+		u.Errorf("write ok fail %s", err.Error())
 		return err
 	}
 
@@ -247,7 +248,7 @@ func (c *Conn) Run() {
 			buf := make([]byte, size)
 			buf = buf[:runtime.Stack(buf, false)]
 
-			log.Error("%v, %s", err, buf)
+			u.Errorf("%v, %s", err, buf)
 		}
 
 		c.Close()
@@ -260,8 +261,9 @@ func (c *Conn) Run() {
 			return
 		}
 
+		u.Debugf("Run() -> dispatch: %v", string(data))
 		if err := c.dispatch(data); err != nil {
-			log.Error("dispatch error %s", err.Error())
+			u.Errorf("dispatch error %s", err.Error())
 			if err != mysql.ErrBadConn {
 				c.writeError(err)
 			}
@@ -279,6 +281,7 @@ func (c *Conn) dispatch(data []byte) error {
 	cmd := data[0]
 	data = data[1:]
 
+	u.Debugf("dispatch: %v ", cmd)
 	switch cmd {
 	case mysql.COM_QUIT:
 		c.Close()
@@ -314,7 +317,7 @@ func (c *Conn) dispatch(data []byte) error {
 }
 
 func (c *Conn) useDB(db string) error {
-	log.Info("UseDB: %v", db)
+	u.Infof("UseDB: %v", db)
 	if s := c.server.getSchema(db); s == nil {
 		return mysql.NewDefaultError(mysql.ER_BAD_DB_ERROR, db)
 	} else {

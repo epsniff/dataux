@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/araddon/dataux/client"
 	"github.com/araddon/dataux/config"
-	"github.com/siddontang/go-log/log"
+	u "github.com/araddon/gou"
 	"sync"
 	"time"
 )
@@ -65,7 +65,7 @@ func (n *Node) getMasterConn() (*client.SqlConn, error) {
 	if db == nil {
 		return nil, fmt.Errorf("master is down")
 	}
-	log.Debug("about to GetConn:   client.SqlConn")
+	u.Debugf("about to GetConn:   client.SqlConn")
 	return db.GetConn()
 }
 
@@ -93,19 +93,19 @@ func (n *Node) checkMaster() {
 	n.Unlock()
 
 	if db == nil {
-		log.Info("no master avaliable")
+		u.Infof("no master avaliable")
 		return
 	}
 
 	if err := db.Ping(); err != nil {
-		log.Error("%s ping master %s error %s", n, db.Addr(), err.Error())
+		u.Errorf("%s ping master %s error %s", n, db.Addr(), err.Error())
 	} else {
 		n.lastMasterPing = time.Now().Unix()
 		return
 	}
 
 	if int64(n.downAfterNoAlive) > 0 && time.Now().Unix()-n.lastMasterPing > int64(n.downAfterNoAlive) {
-		log.Error("%s down master db %s", n, n.master.Addr())
+		u.Errorf("%s down master db %s", n, n.master.Addr())
 
 		n.downMaster()
 	}
@@ -118,13 +118,13 @@ func (n *Node) checkSlave() {
 
 	db := n.slave
 	if err := db.Ping(); err != nil {
-		log.Error("%s ping slave %s error %s", n, db.Addr(), err.Error())
+		u.Errorf("%s ping slave %s error %s", n, db.Addr(), err.Error())
 	} else {
 		n.lastSlavePing = time.Now().Unix()
 	}
 
 	if int64(n.downAfterNoAlive) > 0 && time.Now().Unix()-n.lastSlavePing > int64(n.downAfterNoAlive) {
-		log.Error("%s slave db %s not alive over %ds, down it",
+		u.Errorf("%s slave db %s not alive over %ds, down it",
 			n, db.Addr(), int64(n.downAfterNoAlive/time.Second))
 
 		n.downSlave()
@@ -295,7 +295,7 @@ func (s *Server) parseNode(cfg config.NodeConfig) (*Node, error) {
 
 	if len(cfg.Slave) > 0 {
 		if n.slave, err = n.openDB(cfg.Slave); err != nil {
-			log.Error(err.Error())
+			u.Errorf(err.Error())
 			n.slave = nil
 		}
 	}

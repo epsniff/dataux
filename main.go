@@ -4,6 +4,7 @@ import (
 	"flag"
 	"github.com/araddon/dataux/config"
 	"github.com/araddon/dataux/proxy"
+	u "github.com/araddon/gou"
 	"github.com/siddontang/go-log/log"
 	"os"
 	"os/signal"
@@ -12,25 +13,30 @@ import (
 	"syscall"
 )
 
-var configFile *string = flag.String("config", "mixer.conf", "mixer proxy config file")
-var logLevel *string = flag.String("log-level", "", "log level [debug|info|warn|error], default error")
+var (
+	configFile *string = flag.String("config", "mixer.conf", "mixer proxy config file")
+	logLevel   *string = flag.String("loglevel", "debug", "log level [debug|info|warn|error], default error")
+)
 
 func main() {
+
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	flag.Parse()
 
 	if len(*configFile) == 0 {
-		log.Error("must use a config file")
+		u.Errorf("must use a config file")
 		return
 	}
 
 	cfg, err := config.ParseConfigFile(*configFile)
 	if err != nil {
-		log.Error(err.Error())
+		u.Errorf(err.Error())
 		return
 	}
 
+	u.SetupLogging(*logLevel)
+	u.SetColorIfTerminal()
 	if *logLevel != "" {
 		setLogLevel(*logLevel)
 	} else {
@@ -40,7 +46,7 @@ func main() {
 	var svr *proxy.Server
 	svr, err = proxy.NewServer(cfg)
 	if err != nil {
-		log.Error(err.Error())
+		u.Errorf(err.Error())
 		return
 	}
 
@@ -53,7 +59,7 @@ func main() {
 
 	go func() {
 		sig := <-sc
-		log.Info("Got signal [%d] to exit.", sig)
+		u.Infof("Got signal [%d] to exit.", sig)
 		svr.Close()
 	}()
 
