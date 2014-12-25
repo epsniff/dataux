@@ -215,7 +215,8 @@ func checkUpdateExprs(exprs ast.UpdateExprs, rule *Rule) {
 
 	for _, e := range exprs {
 		if string(e.Name.Name) == rule.Key {
-			panic(ast.NewParserError("routing key can not in update expression"))
+			panic(NewKeyError("routing key can not in update expression name:%s key:%s",
+				e.Name.Name, rule.Key))
 		}
 	}
 }
