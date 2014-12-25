@@ -2,74 +2,88 @@ package config
 
 import (
 	"fmt"
+	u "github.com/araddon/gou"
+	"github.com/bmizerany/assert"
 	"reflect"
 	"testing"
 )
 
+func init() {
+	u.SetupLogging("debug")
+	u.SetColorIfTerminal()
+}
 func TestConfig(t *testing.T) {
-	var testConfigData = []byte(
-		`
-addr : 127.0.0.1:4000
+	var configData = `
+addr : "127.0.0.1:4000"
 user : root
-password : 
+# password : ""
 log_level : error
 
-nodes :
-- 
-  name : node1 
-  down_after_noalive : 300
-  idle_conns : 16
-  rw_split: true
-  user: root
-  password:
-  master : 127.0.0.1:3306
-  slave : 127.0.0.1:4306
-- 
-  name : node2
-  user: root
-  master : 127.0.0.1:3307
+nodes [
+  {
+    name : node1 
+    down_after_noalive : 300
+    idle_conns : 16
+    rw_split : true
+    user : root
+    #password: ""
+    master : "127.0.0.1:3306"
+    slave : "127.0.0.1:4306"
+  },
+  {
+    name : node2
+    user: root
+    master : "127.0.0.1:3307"
+  },
+  {
+    name : node3 
+    down_after_noalive : 300
+    idle_conns : 16
+    rw_split: false
+    user : root
+    master : "127.0.0.1:3308"
+  }
+]
 
-- 
-  name : node3 
-  down_after_noalive : 300
-  idle_conns : 16
-  rw_split: false
-  user: root
-  password:
-  master : 127.0.0.1:3308
+# schemas
+schemas : [
+  {
+    db : mixer
+    nodes : ["node1", "node2", "node3"]
+    backend_type : mysql
+    # list of rules
+    rules : {
+      default : node1
+      # shards
+      shard : [
+        {
+          table : mixer_test_shard_hash
+          key : id
+          nodes: ["node1", "node2", "node3"]
+          type : hash
+        },
+        {
+          table: mixer_test_shard_range
+          key: id
+          type: range
+          nodes: [ node2, node3 ]
+          range: "-10000-"
+        }
+      ]
+    }
+  }
+]
+`
 
-schemas :
--
-  db : mixer 
-  nodes: [node1, node2, node3]
-  rules:
-    default: node1
-    shard:
-      -   
-        table: mixer_test_shard_hash
-        key: id
-        nodes: [node1, node2, node3]
-        type: hash
+	conf, err := LoadConfig(configData)
+	assert.Tf(t, err == nil && conf != nil, "Must not error on parse of config: %v", err)
 
-      -   
-        table: mixer_test_shard_range
-        key: id
-        type: range
-        nodes: [node2, node3]
-        range: -10000-
-`)
-
-	cfg, err := ParseConfigData(testConfigData)
-	if err != nil {
-		t.Fatal(err)
+	if len(conf.Nodes) != 3 {
+		t.Fatal(len(conf.Nodes))
 	}
 
-	if len(cfg.Nodes) != 3 {
-		t.Fatal(len(cfg.Nodes))
-	}
-
-	if len(cfg.Schemas) != 1 {
-		t.Fatal(len(cfg.Schemas))
+	if len(conf.Schemas) != 1 {
+		t.Fatal(len(conf.Schemas))
 	}
 
 	testNode := NodeConfig{
@@ -85,8 +99,8 @@ schemas :
 		Slave:  "127.0.0.1:4306",
 	}
 
-	if !reflect.DeepEqual(cfg.Nodes[0], testNode) {
-		fmt.Printf("%v\n", cfg.Nodes[0])
+	if !reflect.DeepEqual(conf.Nodes[0], testNode) {
+		fmt.Printf("%v\n", conf.Nodes[0])
 		t.Fatal("node1 must equal")
 	}
 
@@ -96,7 +110,7 @@ schemas :
 		Master: "127.0.0.1:3307",
 	}
 
-	if !reflect.DeepEqual(cfg.Nodes[1], testNode_2) {
+	if !reflect.DeepEqual(conf.Nodes[1], testNode_2) {
 		t.Fatal("node2 must equal")
 	}
 
@@ -106,7 +120,7 @@ schemas :
 		Nodes: []string{"node1", "node2", "node3"},
 		Type:  "hash",
 	}
-	if !reflect.DeepEqual(cfg.Schemas[0].RulesConifg.ShardRule[0], testShard_1) {
+	if !reflect.DeepEqual(conf.Schemas[0].RulesConifg.ShardRule[0], testShard_1) {
 		t.Fatal("ShardConfig0 must equal")
 	}
 
@@ -117,11 +131,11 @@ schemas :
 		Type:  "range",
 		Range: "-10000-",
 	}
-	if !reflect.DeepEqual(cfg.Schemas[0].RulesConifg.ShardRule[1], testShard_2) {
+	if !reflect.DeepEqual(conf.Schemas[0].RulesConifg.ShardRule[1], testShard_2) {
 		t.Fatal("ShardConfig1 must equal")
 	}
 
-	if 2 != len(cfg.Schemas[0].RulesConifg.ShardRule) {
+	if 2 != len(conf.Schemas[0].RulesConifg.ShardRule) {
 		t.Fatal("ShardRule must 2")
 	}
 
@@ -129,21 +143,22 @@ schemas :
 		Default:   "node1",
 		ShardRule: []ShardConfig{testShard_1, testShard_2},
 	}
-	if !reflect.DeepEqual(cfg.Schemas[0].RulesConifg, testRules) {
+	if !reflect.DeepEqual(conf.Schemas[0].RulesConifg, testRules) {
 		t.Fatal("RulesConfig must equal")
 	}
 
 	testSchema := SchemaConfig{
 		DB:          "mixer",
+		BackendType: "mysql",
 		Nodes:       []string{"node1", "node2", "node3"},
 		RulesConifg: testRules,
 	}
 
-	if !reflect.DeepEqual(cfg.Schemas[0], testSchema) {
+	if !reflect.DeepEqual(conf.Schemas[0], testSchema) {
 		t.Fatal("schema must equal")
 	}
 
-	if cfg.LogLevel != "error" || cfg.User != "root" || cfg.Password != "" || cfg.Addr != "127.0.0.1:4000" {
+	if conf.LogLevel != "error" || conf.User != "root" || conf.Password != "" || conf.Addr != "127.0.0.1:4000" {
 		t.Fatal("Top Config not equal.")
 	}
 }
