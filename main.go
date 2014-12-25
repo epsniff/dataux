@@ -2,19 +2,20 @@ package main
 
 import (
 	"flag"
-	"github.com/araddon/dataux/config"
-	"github.com/araddon/dataux/proxy"
-	u "github.com/araddon/gou"
-	"github.com/siddontang/go-log/log"
+	"fmt"
 	"os"
 	"os/signal"
 	"runtime"
-	"strings"
 	"syscall"
+
+	"github.com/araddon/dataux/pkg/models"
+	"github.com/araddon/dataux/pkg/proxy"
+	mysqlproxy "github.com/araddon/dataux/vendor/mixer/proxy"
+	u "github.com/araddon/gou"
 )
 
 var (
-	configFile *string = flag.String("config", "mixer.conf", "mixer proxy config file")
+	configFile *string = flag.String("config", "dataux.conf", "dataux proxy config file")
 	logLevel   *string = flag.String("loglevel", "debug", "log level [debug|info|warn|error], default error")
 )
 
@@ -28,23 +29,20 @@ func main() {
 		u.Errorf("must use a config file")
 		return
 	}
+	u.SetupLogging(*logLevel)
+	u.SetColorIfTerminal()
 
-	cfg, err := config.ParseConfigFile(*configFile)
+	models.ListenerRegister(mysqlproxy.ListenerType, mysqlproxy.ListenerInit)
+
+	// get config
+	conf, err := models.LoadConfigFromFile(*configFile)
 	if err != nil {
 		u.Errorf(err.Error())
 		return
 	}
 
-	u.SetupLogging(*logLevel)
-	u.SetColorIfTerminal()
-	if *logLevel != "" {
-		setLogLevel(*logLevel)
-	} else {
-		setLogLevel(cfg.LogLevel)
-	}
-
 	var svr *proxy.Server
-	svr, err = proxy.NewServer(cfg)
+	svr, err = proxy.NewServer(conf)
 	if err != nil {
 		u.Errorf(err.Error())
 		return
@@ -60,23 +58,8 @@ func main() {
 	go func() {
 		sig := <-sc
 		u.Infof("Got signal [%d] to exit.", sig)
-		svr.Close()
+		svr.Shutdown(proxy.Reason{Reason: "signal", Message: fmt.Sprintf("%v", sig)})
 	}()
 
 	svr.Run()
-}
-
-func setLogLevel(level string) {
-	switch strings.ToLower(level) {
-	case "debug":
-		log.SetLevel(log.LevelDebug)
-	case "info":
-		log.SetLevel(log.LevelInfo)
-	case "warn":
-		log.SetLevel(log.LevelWarn)
-	case "error":
-		log.SetLevel(log.LevelError)
-	default:
-		log.SetLevel(log.LevelError)
-	}
 }

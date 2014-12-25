@@ -2,7 +2,7 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/araddon/dataux/config"
+	"github.com/araddon/dataux/pkg/models"
 	"github.com/araddon/dataux/vendor/mixer/client"
 	u "github.com/araddon/gou"
 	"sync"
@@ -14,13 +14,12 @@ const (
 	Slave  = "slave"
 )
 
-// Node represents a Server/Service for a backend
 type Node struct {
 	sync.Mutex
 
-	server *Server
+	listener *MysqlListener
 
-	cfg config.NodeConfig
+	cfg *models.BackendConfig
 
 	//running master db
 	db *client.DB
@@ -217,8 +216,8 @@ func (n *Node) downSlave() error {
 	return nil
 }
 
-func (s *Server) UpMaster(node string, addr string) error {
-	n := s.getNode(node)
+func (m *MysqlListener) UpMaster(node string, addr string) error {
+	n := m.getNode(node)
 	if n == nil {
 		return fmt.Errorf("invalid node %s", node)
 	}
@@ -226,16 +225,16 @@ func (s *Server) UpMaster(node string, addr string) error {
 	return n.upMaster(addr)
 }
 
-func (s *Server) UpSlave(node string, addr string) error {
-	n := s.getNode(node)
+func (m *MysqlListener) UpSlave(node string, addr string) error {
+	n := m.getNode(node)
 	if n == nil {
 		return fmt.Errorf("invalid node %s", node)
 	}
 
 	return n.upSlave(addr)
 }
-func (s *Server) DownMaster(node string) error {
-	n := s.getNode(node)
+func (m *MysqlListener) DownMaster(node string) error {
+	n := m.getNode(node)
 	if n == nil {
 		return fmt.Errorf("invalid node %s", node)
 	}
@@ -243,41 +242,53 @@ func (s *Server) DownMaster(node string) error {
 	return n.downMaster()
 }
 
-func (s *Server) DownSlave(node string) error {
-	n := s.getNode(node)
+func (m *MysqlListener) DownSlave(node string) error {
+	n := m.getNode(node)
 	if n == nil {
 		return fmt.Errorf("invalid node [%s].", node)
 	}
 	return n.downSlave()
 }
 
-func (s *Server) getNode(name string) *Node {
-	return s.nodes[name]
+func (m *MysqlListener) getNode(name string) *Node {
+	return m.nodes[name]
 }
 
-func (s *Server) parseNodes() error {
-	cfg := s.cfg
-	s.nodes = make(map[string]*Node, len(cfg.Nodes))
+func (m *MysqlListener) parseNodes() error {
+	cfg := m.cfg
+	m.nodes = make(map[string]*Node)
 
-	for _, v := range cfg.Nodes {
-		if _, ok := s.nodes[v.Name]; ok {
-			return fmt.Errorf("duplicate node [%s].", v.Name)
+	for _, be := range cfg.Backends {
+		if be.BackendType == "" {
+			for _, schemaConf := range m.cfg.Schemas {
+				for _, bename := range schemaConf.Backends {
+					if bename == be.Name {
+						be.BackendType = schemaConf.BackendType
+					}
+				}
+			}
 		}
+		if be.BackendType == ListenerType {
+			if _, ok := m.nodes[be.Name]; ok {
+				return fmt.Errorf("duplicate node [%s].", be.Name)
+			}
 
-		n, err := s.parseNode(v)
-		if err != nil {
-			return err
+			n, err := m.parseNode(be)
+			if err != nil {
+				return err
+			}
+
+			u.Infof("adding node: [%s]", be.String())
+			m.nodes[be.Name] = n
 		}
-
-		s.nodes[v.Name] = n
 	}
 
 	return nil
 }
 
-func (s *Server) parseNode(cfg config.NodeConfig) (*Node, error) {
+func (m *MysqlListener) parseNode(cfg *models.BackendConfig) (*Node, error) {
 	n := new(Node)
-	n.server = s
+	n.listener = m
 	n.cfg = cfg
 
 	n.downAfterNoAlive = time.Duration(cfg.DownAfterNoAlive) * time.Second
@@ -295,7 +306,7 @@ func (s *Server) parseNode(cfg config.NodeConfig) (*Node, error) {
 
 	if len(cfg.Slave) > 0 {
 		if n.slave, err = n.openDB(cfg.Slave); err != nil {
-			u.Errorf(err.Error())
+			u.Errorf("open db error", err)
 			n.slave = nil
 		}
 	}

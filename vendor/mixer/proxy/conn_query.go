@@ -75,7 +75,7 @@ func (c *Conn) getShardList(stmt sqlparser.Statement, bindVars map[string]interf
 
 	n := make([]*Node, 0, len(ns))
 	for _, name := range ns {
-		n = append(n, c.server.getNode(name))
+		n = append(n, c.listener.getNode(name))
 	}
 	return n, nil
 }

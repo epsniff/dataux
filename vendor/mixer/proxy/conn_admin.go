@@ -37,9 +37,9 @@ func (c *Conn) adminUpNodeServer(values sqlparser.ValExprs) error {
 
 	switch sType {
 	case Master:
-		return c.server.UpMaster(nodeName, addr)
+		return c.listener.UpMaster(nodeName, addr)
 	case Slave:
-		return c.server.UpSlave(nodeName, addr)
+		return c.listener.UpSlave(nodeName, addr)
 	default:
 		return fmt.Errorf("invalid server type %s", sType)
 	}
@@ -55,9 +55,9 @@ func (c *Conn) adminDownNodeServer(values sqlparser.ValExprs) error {
 
 	switch sType {
 	case Master:
-		return c.server.DownMaster(nodeName)
+		return c.listener.DownMaster(nodeName)
 	case Slave:
-		return c.server.DownSlave(nodeName)
+		return c.listener.DownSlave(nodeName)
 	default:
 		return fmt.Errorf("invalid server type %s", sType)
 	}

@@ -1,24 +1,32 @@
 package proxy
 
 import (
-	"github.com/araddon/dataux/config"
+	"github.com/araddon/dataux/pkg/models"
 	"github.com/araddon/dataux/vendor/mixer/client"
+	u "github.com/araddon/gou"
+
 	"sync"
 	"testing"
 	"time"
 )
 
+var _ = u.EMPTY
 var testServerOnce sync.Once
-var testServer *Server
+var testListener *MysqlListener
 var testDBOnce sync.Once
 var testDB *client.DB
+
+func init() {
+	u.SetupLogging("debug")
+	u.SetColorOutput()
+}
 
 var testConfigData = `
 
 addr : "127.0.0.1:4000"
 user : root
 
-nodes [
+backends [
   {
     name : node1 
     down_after_noalive : 300
@@ -51,7 +59,7 @@ nodes [
 schemas : [
   {
     db : mixer
-    nodes : ["node1", "node2", "node3"]
+    backends : ["node1", "node2", "node3"]
     backend_type : mysql
     # list of rules
     rules : {
@@ -61,14 +69,14 @@ schemas : [
         {
           table : mixer_test_shard_hash
           key : id
-          nodes: [ "node2", "node3"]
+          backends: [ "node2", "node3"]
           type : hash
         },
         {
           table: mixer_test_shard_range
           key: id
           type: range
-          nodes: [ node2, node3 ]
+          backends: [ node2, node3 ]
           range: "-10000-"
         }
       ]
@@ -77,26 +85,26 @@ schemas : [
 ]
 `
 
-func newTestServer(t *testing.T) *Server {
+func newTestServer(t *testing.T) *MysqlListener {
 	f := func() {
-		cfg, err := config.LoadConfig(testConfigData)
+		cfg, err := models.LoadConfig(testConfigData)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
 
-		testServer, err = NewServer(cfg)
+		testListener, err = NewMysqlListener(cfg)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		go testServer.Run()
+		go testListener.Run(make(chan bool))
 
 		time.Sleep(1 * time.Second)
 	}
 
 	testServerOnce.Do(f)
 
-	return testServer
+	return testListener
 }
 
 func newTestDB(t *testing.T) *client.DB {

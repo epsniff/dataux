@@ -1,4 +1,4 @@
-package config
+package models
 
 import (
 	"fmt"
@@ -10,16 +10,17 @@ import (
 
 func init() {
 	u.SetupLogging("debug")
-	u.SetColorIfTerminal()
+	u.SetColorOutput()
 }
 func TestConfig(t *testing.T) {
+
 	var configData = `
 addr : "127.0.0.1:4000"
 user : root
 # password : ""
 log_level : error
 
-nodes [
+backends [
   {
     name : node1 
     down_after_noalive : 300
@@ -49,7 +50,7 @@ nodes [
 schemas : [
   {
     db : mixer
-    nodes : ["node1", "node2", "node3"]
+    backends : ["node1", "node2", "node3"]
     backend_type : mysql
     # list of rules
     rules : {
@@ -59,14 +60,14 @@ schemas : [
         {
           table : mixer_test_shard_hash
           key : id
-          nodes: ["node1", "node2", "node3"]
+          backends: ["node1", "node2", "node3"]
           type : hash
         },
         {
           table: mixer_test_shard_range
           key: id
           type: range
-          nodes: [ node2, node3 ]
+          backends: [ node2, node3 ]
           range: "-10000-"
         }
       ]
@@ -78,15 +79,15 @@ schemas : [
 	conf, err := LoadConfig(configData)
 	assert.Tf(t, err == nil && conf != nil, "Must not error on parse of config: %v", err)
 
-	if len(conf.Nodes) != 3 {
-		t.Fatal(len(conf.Nodes))
+	if len(conf.Backends) != 3 {
+		t.Fatal(len(conf.Backends))
 	}
 
 	if len(conf.Schemas) != 1 {
 		t.Fatal(len(conf.Schemas))
 	}
 
-	testNode := NodeConfig{
+	testNode := BackendConfig{
 		Name:             "node1",
 		DownAfterNoAlive: 300,
 		IdleConns:        16,
@@ -99,37 +100,36 @@ schemas : [
 		Slave:  "127.0.0.1:4306",
 	}
 
-	if !reflect.DeepEqual(conf.Nodes[0], testNode) {
-		fmt.Printf("%v\n", conf.Nodes[0])
-		t.Fatal("node1 must equal")
+	if !reflect.DeepEqual(conf.Backends[0], &testNode) {
+		t.Fatalf("node1 must equal %v", fmt.Sprintf("%v\n", conf.Backends[0]))
 	}
 
-	testNode_2 := NodeConfig{
+	testNode_2 := BackendConfig{
 		Name:   "node2",
 		User:   "root",
 		Master: "127.0.0.1:3307",
 	}
 
-	if !reflect.DeepEqual(conf.Nodes[1], testNode_2) {
+	if !reflect.DeepEqual(conf.Backends[1], &testNode_2) {
 		t.Fatal("node2 must equal")
 	}
 
 	testShard_1 := ShardConfig{
-		Table: "mixer_test_shard_hash",
-		Key:   "id",
-		Nodes: []string{"node1", "node2", "node3"},
-		Type:  "hash",
+		Table:    "mixer_test_shard_hash",
+		Key:      "id",
+		Backends: []string{"node1", "node2", "node3"},
+		Type:     "hash",
 	}
 	if !reflect.DeepEqual(conf.Schemas[0].RulesConifg.ShardRule[0], testShard_1) {
 		t.Fatal("ShardConfig0 must equal")
 	}
 
 	testShard_2 := ShardConfig{
-		Table: "mixer_test_shard_range",
-		Key:   "id",
-		Nodes: []string{"node2", "node3"},
-		Type:  "range",
-		Range: "-10000-",
+		Table:    "mixer_test_shard_range",
+		Key:      "id",
+		Backends: []string{"node2", "node3"},
+		Type:     "range",
+		Range:    "-10000-",
 	}
 	if !reflect.DeepEqual(conf.Schemas[0].RulesConifg.ShardRule[1], testShard_2) {
 		t.Fatal("ShardConfig1 must equal")
@@ -150,11 +150,11 @@ schemas : [
 	testSchema := SchemaConfig{
 		DB:          "mixer",
 		BackendType: "mysql",
-		Nodes:       []string{"node1", "node2", "node3"},
+		Backends:    []string{"node1", "node2", "node3"},
 		RulesConifg: testRules,
 	}
 
-	if !reflect.DeepEqual(conf.Schemas[0], testSchema) {
+	if !reflect.DeepEqual(conf.Schemas[0], &testSchema) {
 		t.Fatal("schema must equal")
 	}
 

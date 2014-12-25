@@ -10,7 +10,7 @@ func TestParseRule(t *testing.T) {
 schemas : [
   {
     db : mixer
-    nodes : ["node1", "node2", "node3"]
+    backends : ["node1", "node2", "node3"]
     backend_type : mysql
     # list of rules
     rules : {
@@ -20,14 +20,14 @@ schemas : [
         {
           table : mixer_test_shard_hash
           key : id
-          nodes: [ "node2", "node3"]
+          backends: [ "node2", "node3"]
           type : hash
         },
         {   
           table: mixer_test_shard_range
           key: id
           type: range
-          nodes: [ node2, node3 ]
+          backends: [ node2, node3 ]
           range: "-10000-"
         }
       ]

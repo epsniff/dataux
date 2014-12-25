@@ -2,7 +2,7 @@ package router
 
 import (
 	"fmt"
-	"github.com/araddon/dataux/config"
+	"github.com/araddon/dataux/pkg/models"
 	"strings"
 )
 
@@ -10,9 +10,7 @@ type Rule struct {
 	DB    string
 	Table string
 	Key   string
-
-	Type string
-
+	Type  string
 	Nodes []string
 	Shard Shard
 }
@@ -54,28 +52,28 @@ type Router struct {
 	DB          string
 	Rules       map[string]*Rule //key is <table name>
 	DefaultRule *Rule
-	nodes       []string //just for human saw
+	nodes       []string //just for human visiblity
 }
 
-func NewRouter(schemaConfig *config.SchemaConfig) (*Router, error) {
+func NewRouter(schemaConfig *models.SchemaConfig) (*Router, error) {
 
-	if !includeNode(schemaConfig.Nodes, schemaConfig.RulesConifg.Default) {
+	if !includeNode(schemaConfig.Backends, schemaConfig.RulesConifg.Default) {
 		return nil, fmt.Errorf("default node[%s] not in the nodes list.",
 			schemaConfig.RulesConifg.Default)
 	}
 
 	rt := new(Router)
 	rt.DB = schemaConfig.DB
-	rt.nodes = schemaConfig.Nodes
+	rt.nodes = schemaConfig.Backends
 	rt.Rules = make(map[string]*Rule, len(schemaConfig.RulesConifg.ShardRule))
 	rt.DefaultRule = NewDefaultRule(rt.DB, schemaConfig.RulesConifg.Default)
 
 	for _, shard := range schemaConfig.RulesConifg.ShardRule {
 		rc := &RuleConfig{shard}
-		for _, node := range shard.Nodes {
+		for _, node := range shard.Backends {
 			if !includeNode(rt.nodes, node) {
 				return nil, fmt.Errorf("shard table[%s] node[%s] not in the schema.nodes list:[%s].",
-					shard.Table, node, strings.Join(shard.Nodes, ","))
+					shard.Table, node, strings.Join(shard.Backends, ","))
 			}
 		}
 		rule, err := rc.ParseRule(rt.DB)

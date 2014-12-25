@@ -2,7 +2,7 @@ package router
 
 import (
 	"fmt"
-	"github.com/araddon/dataux/config"
+	"github.com/araddon/dataux/pkg/models"
 	"regexp"
 	"strconv"
 	"strings"
@@ -15,7 +15,7 @@ var (
 )
 
 type RuleConfig struct {
-	config.ShardConfig
+	models.ShardConfig
 }
 
 func (c *RuleConfig) ParseRule(db string) (*Rule, error) {
@@ -24,7 +24,7 @@ func (c *RuleConfig) ParseRule(db string) (*Rule, error) {
 	r.Table = c.Table
 	r.Key = c.Key
 	r.Type = c.Type
-	r.Nodes = c.Nodes
+	r.Nodes = c.Backends
 
 	if err := c.parseShard(r); err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (c *RuleConfig) parseNodes(r *Rule) error {
 		return err
 	}
 
-	ns := c.Nodes // strings.Split(c.Nodes, ",")
+	ns := c.Backends // strings.Split(c.Nodes, ",")
 
 	nodes := map[string]struct{}{}
 

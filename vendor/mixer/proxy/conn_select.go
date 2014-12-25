@@ -88,7 +88,7 @@ func (c *Conn) handleFieldList(data []byte) error {
 
 	nodeName := c.schema.rule.GetRule(table).Nodes[0]
 
-	n := c.server.getNode(nodeName)
+	n := c.listener.getNode(nodeName)
 
 	co, err := n.getMasterConn()
 	if err != nil {

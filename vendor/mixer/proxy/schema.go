@@ -15,20 +15,21 @@ type Schema struct {
 	rule *router.Router
 }
 
-func (s *Server) parseSchemas() error {
-	s.schemas = make(map[string]*Schema)
+func (m *MysqlListener) parseSchemas() error {
 
-	for _, schemaCfg := range s.cfg.Schemas {
-		if _, ok := s.schemas[schemaCfg.DB]; ok {
+	m.schemas = make(map[string]*Schema)
+
+	for _, schemaCfg := range m.cfg.Schemas {
+		if _, ok := m.schemas[schemaCfg.DB]; ok {
 			return fmt.Errorf("duplicate schema [%s].", schemaCfg.DB)
 		}
-		if len(schemaCfg.Nodes) == 0 {
+		if len(schemaCfg.Backends) == 0 {
 			return fmt.Errorf("schema [%s] must have a node.", schemaCfg.DB)
 		}
 
 		nodes := make(map[string]*Node)
-		for _, n := range schemaCfg.Nodes {
-			if s.getNode(n) == nil {
+		for _, n := range schemaCfg.Backends {
+			if m.getNode(n) == nil {
 				return fmt.Errorf("schema [%s] node [%s] config is not exists.", schemaCfg.DB, n)
 			}
 
@@ -36,15 +37,15 @@ func (s *Server) parseSchemas() error {
 				return fmt.Errorf("schema [%s] node [%s] duplicate.", schemaCfg.DB, n)
 			}
 
-			nodes[n] = s.getNode(n)
+			nodes[n] = m.getNode(n)
 		}
 
-		rule, err := router.NewRouter(&schemaCfg)
+		rule, err := router.NewRouter(schemaCfg)
 		if err != nil {
 			return err
 		}
 
-		s.schemas[schemaCfg.DB] = &Schema{
+		m.schemas[schemaCfg.DB] = &Schema{
 			db:    schemaCfg.DB,
 			nodes: nodes,
 			rule:  rule,
@@ -54,6 +55,6 @@ func (s *Server) parseSchemas() error {
 	return nil
 }
 
-func (s *Server) getSchema(db string) *Schema {
-	return s.schemas[db]
+func (m *MysqlListener) getSchema(db string) *Schema {
+	return m.schemas[db]
 }

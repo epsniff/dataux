@@ -11,7 +11,7 @@ import (
 	"net"
 	"runtime"
 	"sync"
-	"sync/atomic"
+	//"sync/atomic"
 )
 
 var DEFAULT_CAPABILITY uint32 = mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_LONG_FLAG |
@@ -26,7 +26,7 @@ type Conn struct {
 
 	c net.Conn
 
-	server *Server
+	listener *MysqlListener
 
 	capability uint32
 
@@ -56,37 +56,6 @@ type Conn struct {
 }
 
 var baseConnId uint32 = 10000
-
-func (s *Server) newConn(co net.Conn) *Conn {
-	c := new(Conn)
-
-	c.c = co
-
-	c.pkg = mysql.NewPacketIO(co)
-
-	c.server = s
-
-	c.c = co
-	c.pkg.Sequence = 0
-
-	c.connectionId = atomic.AddUint32(&baseConnId, 1)
-
-	c.status = mysql.SERVER_STATUS_AUTOCOMMIT
-
-	c.salt, _ = mysql.RandomBuf(20)
-
-	c.txConns = make(map[*Node]*client.SqlConn)
-
-	c.closed = false
-
-	c.collation = mysql.DEFAULT_COLLATION_ID
-	c.charset = mysql.DEFAULT_CHARSET
-
-	c.stmtId = 0
-	c.stmts = make(map[uint32]*Stmt)
-
-	return c
-}
 
 func (c *Conn) Handshake() error {
 
@@ -214,7 +183,7 @@ func (c *Conn) readHandshakeResponse() error {
 	pos++
 	auth := data[pos : pos+authLen]
 
-	checkAuth := mysql.CalcPassword(c.salt, []byte(c.server.cfg.Password))
+	checkAuth := mysql.CalcPassword(c.salt, []byte(c.listener.cfg.Password))
 
 	if !bytes.Equal(auth, checkAuth) {
 		return mysql.NewDefaultError(mysql.ER_ACCESS_DENIED_ERROR, c.c.RemoteAddr().String(), c.user, "Yes")
@@ -318,7 +287,7 @@ func (c *Conn) dispatch(data []byte) error {
 
 func (c *Conn) useDB(db string) error {
 	u.Infof("UseDB: %v", db)
-	if s := c.server.getSchema(db); s == nil {
+	if s := c.listener.getSchema(db); s == nil {
 		return mysql.NewDefaultError(mysql.ER_BAD_DB_ERROR, db)
 	} else {
 		c.schema = s

@@ -33,8 +33,8 @@ func (c *Conn) handleShow(sql string, stmt *sqlparser.Show) error {
 }
 
 func (c *Conn) handleShowDatabases() (*Resultset, error) {
-	dbs := make([]interface{}, 0, len(c.server.schemas))
-	for key := range c.server.schemas {
+	dbs := make([]interface{}, 0, len(c.listener.schemas))
+	for key := range c.listener.schemas {
 		dbs = append(dbs, key)
 	}
 
@@ -45,7 +45,7 @@ func (c *Conn) handleShowTables(sql string, stmt *sqlparser.Show) (*Resultset, e
 	s := c.schema
 	if stmt.From != nil {
 		db := nstring(stmt.From)
-		s = c.server.getSchema(db)
+		s = c.listener.getSchema(db)
 	}
 
 	if s == nil {
@@ -112,14 +112,14 @@ func (c *Conn) handleShowProxyConfig() (*Resultset, error) {
 		Column = 3
 	)
 
-	rows = append(rows, []string{"Global_Config", "Addr", c.server.cfg.Addr})
-	rows = append(rows, []string{"Global_Config", "User", c.server.cfg.User})
-	rows = append(rows, []string{"Global_Config", "Password", c.server.cfg.Password})
-	rows = append(rows, []string{"Global_Config", "LogLevel", c.server.cfg.LogLevel})
-	rows = append(rows, []string{"Global_Config", "Schemas_Count", fmt.Sprintf("%d", len(c.server.schemas))})
-	rows = append(rows, []string{"Global_Config", "Nodes_Count", fmt.Sprintf("%d", len(c.server.nodes))})
+	rows = append(rows, []string{"Global_Config", "Addr", c.listener.cfg.Addr})
+	rows = append(rows, []string{"Global_Config", "User", c.listener.cfg.User})
+	rows = append(rows, []string{"Global_Config", "Password", c.listener.cfg.Password})
+	rows = append(rows, []string{"Global_Config", "LogLevel", c.listener.cfg.LogLevel})
+	rows = append(rows, []string{"Global_Config", "Schemas_Count", fmt.Sprintf("%d", len(c.listener.schemas))})
+	rows = append(rows, []string{"Global_Config", "Nodes_Count", fmt.Sprintf("%d", len(c.listener.nodes))})
 
-	for db, schema := range c.server.schemas {
+	for db, schema := range c.listener.schemas {
 		rows = append(rows, []string{"Schemas", "DB", db})
 
 		var nodeNames []string
