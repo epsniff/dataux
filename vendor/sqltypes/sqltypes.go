@@ -10,10 +10,10 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strconv"
 	"time"
-
-	"github.com/araddon/dataux/vendor/mixer/hack"
+	"unsafe"
 )
 
 var (
@@ -74,7 +74,7 @@ func (v Value) String() string {
 	if v.Inner == nil {
 		return ""
 	}
-	return hack.String(v.Inner.raw())
+	return StringUnsafe(v.Inner.raw())
 }
 
 // ParseInt64 will parse a Numeric value into an int64
@@ -346,4 +346,14 @@ func init() {
 	gob.Register(Numeric(nil))
 	gob.Register(Fractional(nil))
 	gob.Register(String(nil))
+}
+
+// no copy to change slice to string
+// use your own risk
+func StringUnsafe(b []byte) (s string) {
+	pbytes := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	pstring := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	pstring.Data = pbytes.Data
+	pstring.Len = pbytes.Len
+	return
 }

@@ -1,7 +1,7 @@
 package router
 
 import (
-	"github.com/araddon/dataux/config"
+	"github.com/araddon/dataux/pkg/models"
 	"testing"
 )
 
@@ -35,11 +35,11 @@ schemas : [
   }
 ]
 `
-	cfg, err := config.LoadConfig(s)
+	cfg, err := models.LoadConfig(s)
 	if err != nil {
 		t.Fatalf("Should load config: %v", err)
 	}
-	rt, err := NewRouter(&cfg.Schemas[0])
+	rt, err := NewRouter(cfg.Schemas[0])
 	if err != nil {
 		t.Fatal(err)
 	}

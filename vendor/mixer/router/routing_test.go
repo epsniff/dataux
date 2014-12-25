@@ -1,19 +1,19 @@
-package sqlparser
+package router
 
 import (
-	"github.com/araddon/dataux/config"
-	"github.com/araddon/dataux/vendor/mixer/router"
+	"github.com/araddon/dataux/pkg/models"
+	//ast "github.com/araddon/dataux/vendor/mixer/sqlparser"
 
 	"fmt"
 	"testing"
 )
 
-func newTestDBRule() *router.Router {
+func newTestDBRule() *Router {
 	var s = `
 schemas : [
   {
     db : mixer
-    nodes: [node1,node2,node3,node4,node5,node6,node7,node8,node9,node10]
+    backends: [node1,node2,node3,node4,node5,node6,node7,node8,node9,node10]
     backend_type : mysql
     # list of rules
     rules : {
@@ -23,14 +23,14 @@ schemas : [
         {
           table : test1
           key : id
-          nodes: [node1,node2,node3,node4,node5,node6,node7,node8,node9,node10]
+          backends: [node1,node2,node3,node4,node5,node6,node7,node8,node9,node10]
           type : hash
         },
         {   
           table: test2
           key: id
           type: range
-          nodes: [node1,node2,node3]
+          backends: [node1,node2,node3]
           range: "-10000-20000-"
         }
       ]
@@ -39,15 +39,15 @@ schemas : [
 ]
 `
 
-	cfg, err := config.LoadConfig(s)
+	cfg, err := models.LoadConfig(s)
 	if err != nil {
 		println(err.Error())
 		panic(err)
 	}
 
-	var r *router.Router
+	var r *Router
 
-	r, err = router.NewRouter(&cfg.Schemas[0])
+	r, err = NewRouter(cfg.Schemas[0])
 	if err != nil {
 		println(err.Error())
 		panic(err)
