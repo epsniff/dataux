@@ -5,6 +5,7 @@ import (
 	"github.com/araddon/dataux/vendor/mixer/client"
 	"github.com/araddon/dataux/vendor/mixer/hack"
 	. "github.com/araddon/dataux/vendor/mixer/mysql"
+	"github.com/araddon/dataux/vendor/mixer/router"
 	"github.com/araddon/dataux/vendor/mixer/sqlparser"
 	"strconv"
 	"strings"
@@ -64,7 +65,7 @@ func (c *Conn) getShardList(stmt sqlparser.Statement, bindVars map[string]interf
 		return nil, NewDefaultError(ER_NO_DB_ERROR)
 	}
 
-	ns, err := sqlparser.GetStmtShardList(stmt, c.schema.rule, bindVars)
+	ns, err := router.GetStmtShardList(stmt, c.schema.rule, bindVars)
 	if err != nil {
 		return nil, err
 	}
