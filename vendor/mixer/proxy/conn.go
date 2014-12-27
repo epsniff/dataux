@@ -357,14 +357,12 @@ func (c *Conn) writeOK(r *mysql.Result) error {
 	err := c.writePacket(data)
 	if err != nil && err == io.EOF {
 		c.c.Close()
+		// I am really not sure about this close, should we be closing?
+		// on eof?  modified from original, not sure if it will re-connect?
 		u.Errorf("closing conn:  %v", err)
-		return err
-	} else if err != nil {
-		c.c.Close()
-		u.Errorf("closing conn:  %v", err)
-		return err
+		return c.writePacket(data)
 	}
-	return c.writePacket(data)
+	return err
 }
 
 func (c *Conn) writeError(e error) error {

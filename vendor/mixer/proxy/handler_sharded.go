@@ -167,12 +167,12 @@ func (m *HandlerSharded) handleQuery(sql string) (err error) {
 		u.Error(err)
 		return fmt.Errorf(`parse sql "%s" error`, sql)
 	}
-	// sqlVm, err := vm.NewSqlVm(sql)
-	// if err != nil {
-	// 	u.Errorf("could not parse sql vm %v", err)
-	// } else {
-	// 	u.Debugf("got sql vm: %T", sqlVm)
-	// }
+	sqlVm, err := vm.NewSqlVm(sql)
+	if err != nil {
+		u.Errorf("could not parse sql vm %v", err)
+	} else {
+		u.Debugf("got sql vm: %T", sqlVm)
+	}
 
 	u.Debugf("handleQuery: %T ", stmt)
 	switch v := stmt.(type) {
