@@ -3,8 +3,11 @@ package router
 import (
 	"fmt"
 	"github.com/araddon/dataux/pkg/models"
+	u "github.com/araddon/gou"
 	"strings"
 )
+
+var _ = u.EMPTY
 
 type Rule struct {
 	DB    string
@@ -69,6 +72,7 @@ func NewRouter(schemaConfig *models.SchemaConfig) (*Router, error) {
 	rt.DefaultRule = NewDefaultRule(rt.DB, schemaConfig.RulesConifg.Default)
 
 	for _, shard := range schemaConfig.RulesConifg.ShardRule {
+		u.Infof("shard: %v", shard)
 		rc := &RuleConfig{shard}
 		for _, node := range shard.Backends {
 			if !includeNode(rt.nodes, node) {

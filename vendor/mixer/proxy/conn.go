@@ -3,15 +3,19 @@ package proxy
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net"
 	"runtime"
+	"strconv"
 	"sync"
 	"sync/atomic"
 
 	"github.com/araddon/dataux/pkg/models"
 	"github.com/araddon/dataux/vendor/mixer/client"
+	"github.com/araddon/dataux/vendor/mixer/hack"
 	"github.com/araddon/dataux/vendor/mixer/mysql"
+	"github.com/araddon/dataux/vendor/mixer/sqlparser"
 	u "github.com/araddon/gou"
 )
 
@@ -286,46 +290,6 @@ func (c *Conn) readHandshakeResponse() error {
 	return nil
 }
 
-// func (c *Conn) dispatch(data []byte) error {
-
-// 	cmd := data[0]
-// 	data = data[1:]
-
-// 	u.Debugf("dispatch: %v ", cmd)
-// 	switch cmd {
-// 	case mysql.COM_QUIT:
-// 		c.Close()
-// 		return nil
-// 	case mysql.COM_QUERY:
-// 		return c.handleQuery(hack.String(data))
-// 	case mysql.COM_PING:
-// 		return c.writeOK(nil)
-// 	case mysql.COM_INIT_DB:
-// 		if err := c.useDB(hack.String(data)); err != nil {
-// 			return err
-// 		} else {
-// 			return c.writeOK(nil)
-// 		}
-// 	case mysql.COM_FIELD_LIST:
-// 		return c.handleFieldList(data)
-// 	case mysql.COM_STMT_PREPARE:
-// 		return c.handleStmtPrepare(hack.String(data))
-// 	case mysql.COM_STMT_EXECUTE:
-// 		return c.handleStmtExecute(data)
-// 	case mysql.COM_STMT_CLOSE:
-// 		return c.handleStmtClose(data)
-// 	case mysql.COM_STMT_SEND_LONG_DATA:
-// 		return c.handleStmtSendLongData(data)
-// 	case mysql.COM_STMT_RESET:
-// 		return c.handleStmtReset(data)
-// 	default:
-// 		msg := fmt.Sprintf("command %d not supported now", cmd)
-// 		return mysql.NewError(mysql.ER_UNKNOWN_ERROR, msg)
-// 	}
-
-// 	return nil
-// }
-
 func (c *Conn) useDB(db string) error {
 	u.Infof("listener connection UseDB: %v", db)
 	if s := c.handler.SchemaUse(db); s == nil {
@@ -439,5 +403,150 @@ func (c *Conn) writeFieldList(status uint16, fs []*mysql.Field) error {
 	if err := c.writeEOF(status); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (c *Conn) newEmptyResultset(stmt *sqlparser.Select) *mysql.Resultset {
+
+	r := new(mysql.Resultset)
+	r.Fields = make([]*mysql.Field, len(stmt.SelectExprs))
+
+	for i, expr := range stmt.SelectExprs {
+		r.Fields[i] = &mysql.Field{}
+		switch e := expr.(type) {
+		case *sqlparser.StarExpr:
+			r.Fields[i].Name = []byte("*")
+		case *sqlparser.NonStarExpr:
+			if e.As != nil {
+				r.Fields[i].Name = e.As
+				r.Fields[i].OrgName = hack.Slice(nstring(e.Expr))
+			} else {
+				r.Fields[i].Name = hack.Slice(nstring(e.Expr))
+			}
+		default:
+			r.Fields[i].Name = hack.Slice(nstring(e))
+		}
+	}
+
+	r.Values = make([][]interface{}, 0)
+	r.RowDatas = make([]mysql.RowData, 0)
+
+	return r
+}
+
+func makeBindVars(args []interface{}) map[string]interface{} {
+	bindVars := make(map[string]interface{}, len(args))
+
+	for i, v := range args {
+		bindVars[fmt.Sprintf("v%d", i+1)] = v
+	}
+
+	return bindVars
+}
+
+func (c *Conn) mergeExecResult(rs []*mysql.Result) error {
+
+	r := new(mysql.Result)
+
+	for _, v := range rs {
+		r.Status |= v.Status
+		r.AffectedRows += v.AffectedRows
+		if r.InsertId == 0 {
+			r.InsertId = v.InsertId
+		} else if r.InsertId > v.InsertId {
+			//last insert id is first gen id for multi row inserted
+			//see http://dev.mysql.com/doc/refman/5.6/en/information-functions.html#function_last-insert-id
+			r.InsertId = v.InsertId
+		}
+	}
+
+	if r.InsertId > 0 {
+		c.lastInsertId = int64(r.InsertId)
+	}
+
+	c.affectedRows = int64(r.AffectedRows)
+	u.Infof("mergeExecResult: %v:%v", r.AffectedRows, c.affectedRows)
+
+	return c.writeOK(r)
+}
+
+func (c *Conn) mergeSelectResult(rs []*mysql.Result, stmt *sqlparser.Select) error {
+	r := rs[0].Resultset
+
+	status := c.status | rs[0].Status
+
+	for i := 1; i < len(rs); i++ {
+		status |= rs[i].Status
+
+		//check fields equal
+
+		for j := range rs[i].Values {
+			r.Values = append(r.Values, rs[i].Values[j])
+			r.RowDatas = append(r.RowDatas, rs[i].RowDatas[j])
+		}
+	}
+
+	//TODO order by, group by, limit offset
+	c.sortSelectResult(r, stmt)
+	//TODO add log here, sort may error because order by key not exist in resultset fields
+
+	if err := c.limitSelectResult(r, stmt); err != nil {
+		return err
+	}
+	u.Infof("mergeSelectResult:  rs(%v) rows?%v", len(rs), r.RowNumber())
+	return c.writeResultset(status, r)
+}
+
+func (c *Conn) sortSelectResult(r *mysql.Resultset, stmt *sqlparser.Select) error {
+	if stmt.OrderBy == nil {
+		return nil
+	}
+
+	sk := make([]mysql.SortKey, len(stmt.OrderBy))
+
+	for i, o := range stmt.OrderBy {
+		sk[i].Name = nstring(o.Expr)
+		sk[i].Direction = o.Direction
+	}
+
+	return r.Sort(sk)
+}
+
+func (c *Conn) limitSelectResult(r *mysql.Resultset, stmt *sqlparser.Select) error {
+	if stmt.Limit == nil {
+		return nil
+	}
+
+	var offset, count int64
+	var err error
+	if stmt.Limit.Offset == nil {
+		offset = 0
+	} else {
+		if o, ok := stmt.Limit.Offset.(sqlparser.NumVal); !ok {
+			return fmt.Errorf("invalid select limit %s", nstring(stmt.Limit))
+		} else {
+			if offset, err = strconv.ParseInt(hack.String([]byte(o)), 10, 64); err != nil {
+				return err
+			}
+		}
+	}
+
+	if o, ok := stmt.Limit.Rowcount.(sqlparser.NumVal); !ok {
+		return fmt.Errorf("invalid limit %s", nstring(stmt.Limit))
+	} else {
+		if count, err = strconv.ParseInt(hack.String([]byte(o)), 10, 64); err != nil {
+			return err
+		} else if count < 0 {
+			return fmt.Errorf("invalid limit %s", nstring(stmt.Limit))
+		}
+	}
+
+	if offset+count > int64(len(r.Values)) {
+		count = int64(len(r.Values)) - offset
+	}
+
+	r.Values = r.Values[offset : offset+count]
+	r.RowDatas = r.RowDatas[offset : offset+count]
+
 	return nil
 }

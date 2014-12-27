@@ -1,13 +1,9 @@
 package proxy
 
 import (
-	"github.com/siddontang/go-log/log"
 	"testing"
 )
 
-func init() {
-	log.SetLevel(log.LevelDebug)
-}
 func TestStmt_DropTable(t *testing.T) {
 	server := newTestServer(t)
 	n := server.nodes["node1"]

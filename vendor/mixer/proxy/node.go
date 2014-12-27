@@ -2,11 +2,12 @@ package proxy
 
 import (
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/araddon/dataux/pkg/models"
 	"github.com/araddon/dataux/vendor/mixer/client"
 	u "github.com/araddon/gou"
-	"sync"
-	"time"
 )
 
 const (

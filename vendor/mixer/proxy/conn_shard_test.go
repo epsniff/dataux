@@ -18,7 +18,7 @@ func setupShardDeleteAll(t *testing.T, table string) {
 	u.Warnf("shard cleanup delete %v", r)
 }
 
-func testShard_Insert(t *testing.T, table string, node string, id int, str string) {
+func testShardInsert(t *testing.T, table string, node string, id int, str string) {
 	conn := newTestDBConn(t)
 
 	s := fmt.Sprintf(`insert into %s (id, str) values (%d, "%s")`, table, id, str)
@@ -48,7 +48,7 @@ func testShard_Insert(t *testing.T, table string, node string, id int, str strin
 	}
 }
 
-func testShard_Select(t *testing.T, table string, where string, strs ...string) {
+func testShardSelect(t *testing.T, table string, where string, strs ...string) {
 	sql := fmt.Sprintf("select str from %s where %s", table, where)
 	conn := newTestDBConn(t)
 
@@ -79,7 +79,7 @@ func testShard_Select(t *testing.T, table string, where string, strs ...string) 
 	}
 }
 
-func testShard_StmtInsert(t *testing.T, table string, node string, id int, str string) {
+func testShardStmtInsert(t *testing.T, table string, node string, id int, str string) {
 	conn := newTestDBConn(t)
 
 	s := fmt.Sprintf(`insert into %s (id, str) values (?, ?)`, table)
@@ -109,7 +109,7 @@ func testShard_StmtInsert(t *testing.T, table string, node string, id int, str s
 	}
 }
 
-func testShard_StmtSelect(t *testing.T, table string, where string, args []interface{}, strs ...string) {
+func testShardStmtSelect(t *testing.T, table string, where string, args []interface{}, strs ...string) {
 	sql := fmt.Sprintf("select str from %s where %s", table, where)
 	conn := newTestDBConn(t)
 
@@ -140,7 +140,7 @@ func testShard_StmtSelect(t *testing.T, table string, where string, args []inter
 	}
 }
 
-func TestShard_DeleteHashTable(t *testing.T) {
+func TestShardDeleteHashTable(t *testing.T) {
 	s := `drop table if exists mixer_test_shard_hash`
 
 	server := newTestServer(t)
@@ -163,7 +163,7 @@ func TestShard_DeleteHashTable(t *testing.T) {
 	}
 }
 
-func TestShard_CreateHashTable(t *testing.T) {
+func TestShardCreateHashTable(t *testing.T) {
 	s := `CREATE TABLE IF NOT EXISTS mixer_test_shard_hash (
           id BIGINT(64) UNSIGNED  NOT NULL,
           str VARCHAR(256),
@@ -189,31 +189,31 @@ func TestShard_CreateHashTable(t *testing.T) {
 	}
 }
 
-func TestShard_HashDefault(t *testing.T) {
+func TestShardHashDefault(t *testing.T) {
 
 	table := "mixer_test_shard_hash"
 
 	setupShardDeleteAll(t, table)
 
-	testShard_Insert(t, table, "node2", 0, "a")
-	testShard_Insert(t, table, "node3", 1, "b")
-	testShard_Insert(t, table, "node2", 2, "c")
-	testShard_Insert(t, table, "node3", 3, "d")
+	testShardInsert(t, table, "node2", 0, "a")
+	testShardInsert(t, table, "node3", 1, "b")
+	testShardInsert(t, table, "node2", 2, "c")
+	testShardInsert(t, table, "node3", 3, "d")
 
-	testShard_Select(t, table, "id = 2", "c")
-	testShard_Select(t, table, "id = 2 or id = 3", "c", "d")
-	testShard_Select(t, table, "id = 2 and id = 3")
-	testShard_Select(t, table, "id in (0, 1, 3)", "a", "b", "d")
+	testShardSelect(t, table, "id = 2", "c")
+	testShardSelect(t, table, "id = 2 or id = 3", "c", "d")
+	testShardSelect(t, table, "id = 2 and id = 3")
+	testShardSelect(t, table, "id in (0, 1, 3)", "a", "b", "d")
 
-	testShard_StmtInsert(t, table, "node2", 10, "a")
-	testShard_StmtInsert(t, table, "node3", 11, "b")
-	testShard_StmtInsert(t, table, "node2", 12, "c")
-	testShard_StmtInsert(t, table, "node3", 13, "d")
+	testShardStmtInsert(t, table, "node2", 10, "a")
+	testShardStmtInsert(t, table, "node3", 11, "b")
+	testShardStmtInsert(t, table, "node2", 12, "c")
+	testShardStmtInsert(t, table, "node3", 13, "d")
 
-	testShard_StmtSelect(t, table, "id = ?", []interface{}{12}, "c")
-	testShard_StmtSelect(t, table, "id = ? or id = ?", []interface{}{12, 13}, "c", "d")
-	testShard_StmtSelect(t, table, "id = ? and id = ?", []interface{}{12, 13})
-	testShard_StmtSelect(t, table, "id in (?, ?, ?)", []interface{}{10, 11, 13}, "a", "b", "d")
+	testShardStmtSelect(t, table, "id = ?", []interface{}{12}, "c")
+	testShardStmtSelect(t, table, "id = ? or id = ?", []interface{}{12, 13}, "c", "d")
+	testShardStmtSelect(t, table, "id = ? and id = ?", []interface{}{12, 13})
+	testShardStmtSelect(t, table, "id in (?, ?, ?)", []interface{}{10, 11, 13}, "a", "b", "d")
 }
 
 func testExecute(t *testing.T, sql string) *mysql.Result {
@@ -227,7 +227,7 @@ func testExecute(t *testing.T, sql string) *mysql.Result {
 	return r
 }
 
-func testShared_SelectOrderBy(t *testing.T, table string, where string, v [][]interface{}) {
+func testSharedSelectOrderBy(t *testing.T, table string, where string, v [][]interface{}) {
 	sql := fmt.Sprintf("select id, str from %s where %s", table, where)
 
 	r := testExecute(t, sql)
@@ -237,15 +237,15 @@ func testShared_SelectOrderBy(t *testing.T, table string, where string, v [][]in
 	}
 }
 
-func TestShard_HashOrderByLimit(t *testing.T) {
+func TestShardHashOrderByLimit(t *testing.T) {
 	table := "mixer_test_shard_hash"
 
 	setupShardDeleteAll(t, table)
 
-	testShard_Insert(t, table, "node2", 4, "a")
-	testShard_Insert(t, table, "node3", 5, "a")
-	testShard_Insert(t, table, "node2", 6, "b")
-	testShard_Insert(t, table, "node3", 7, "b")
+	testShardInsert(t, table, "node2", 4, "a")
+	testShardInsert(t, table, "node3", 5, "a")
+	testShardInsert(t, table, "node2", 6, "b")
+	testShardInsert(t, table, "node3", 7, "b")
 
 	var v [][]interface{}
 	v = [][]interface{}{
@@ -255,7 +255,7 @@ func TestShard_HashOrderByLimit(t *testing.T) {
 		[]interface{}{uint64(4), []byte("a")},
 	}
 
-	testShared_SelectOrderBy(t, table, "id in (4,5,6,7) order by id desc", v)
+	testSharedSelectOrderBy(t, table, "id in (4,5,6,7) order by id desc", v)
 
 	v = [][]interface{}{
 		[]interface{}{uint64(6), []byte("b")},
@@ -264,24 +264,24 @@ func TestShard_HashOrderByLimit(t *testing.T) {
 		[]interface{}{uint64(5), []byte("a")},
 	}
 
-	testShared_SelectOrderBy(t, table, "id in (4,5,6,7) order by str desc, id asc", v)
+	testSharedSelectOrderBy(t, table, "id in (4,5,6,7) order by str desc, id asc", v)
 
 	v = [][]interface{}{
 		[]interface{}{uint64(6), []byte("b")},
 		[]interface{}{uint64(7), []byte("b")},
 	}
 
-	testShared_SelectOrderBy(t, table, "id in (4,5,6,7) order by str desc, id asc limit 0, 2", v)
+	testSharedSelectOrderBy(t, table, "id in (4,5,6,7) order by str desc, id asc limit 0, 2", v)
 
 	v = [][]interface{}{
 		[]interface{}{uint64(5), []byte("a")},
 	}
 
-	testShared_SelectOrderBy(t, table, "id in (4,5,6,7) order by str desc, id asc limit 1, 2", v)
+	testSharedSelectOrderBy(t, table, "id in (4,5,6,7) order by str desc, id asc limit 1, 2", v)
 
 }
 
-func TestShard_DeleteRangeTable(t *testing.T) {
+func TestShardDeleteRangeTable(t *testing.T) {
 	s := `drop table if exists mixer_test_shard_range`
 
 	server := newTestServer(t)
@@ -304,7 +304,7 @@ func TestShard_DeleteRangeTable(t *testing.T) {
 	}
 }
 
-func TestShard_CreateRangeTable(t *testing.T) {
+func TestShardCreateRangeTable(t *testing.T) {
 	s := `CREATE TABLE IF NOT EXISTS mixer_test_shard_range (
           id BIGINT(64) UNSIGNED  NOT NULL,
           str VARCHAR(256),
@@ -331,26 +331,26 @@ func TestShard_CreateRangeTable(t *testing.T) {
 	}
 }
 
-func TestShard_Range(t *testing.T) {
+func TestShardRange(t *testing.T) {
 	table := "mixer_test_shard_range"
-	testShard_Insert(t, table, "node2", 0, "a")
-	testShard_Insert(t, table, "node3", 10000, "b")
-	testShard_StmtInsert(t, table, "node2", 2, "c")
-	testShard_StmtInsert(t, table, "node3", 10001, "d")
+	testShardInsert(t, table, "node2", 0, "a")
+	testShardInsert(t, table, "node3", 10000, "b")
+	testShardStmtInsert(t, table, "node2", 2, "c")
+	testShardStmtInsert(t, table, "node3", 10001, "d")
 
-	testShard_Select(t, table, "id = 2", "c")
-	testShard_Select(t, table, "id = 2 or id = 10001", "c", "d")
-	testShard_Select(t, table, "id = 2 and id = 10001")
-	testShard_Select(t, table, "id in (0, 10000, 10001)", "a", "b", "d")
-	testShard_Select(t, table, "id < 1 or id >= 10000", "a", "b", "d")
-	testShard_Select(t, table, "id > 1 and id <= 10000", "b", "c")
-	testShard_Select(t, table, "id < 1 and id >= 10000")
+	testShardSelect(t, table, "id = 2", "c")
+	testShardSelect(t, table, "id = 2 or id = 10001", "c", "d")
+	testShardSelect(t, table, "id = 2 and id = 10001")
+	testShardSelect(t, table, "id in (0, 10000, 10001)", "a", "b", "d")
+	testShardSelect(t, table, "id < 1 or id >= 10000", "a", "b", "d")
+	testShardSelect(t, table, "id > 1 and id <= 10000", "b", "c")
+	testShardSelect(t, table, "id < 1 and id >= 10000")
 
-	testShard_StmtSelect(t, table, "id = ?", []interface{}{2}, "c")
-	testShard_StmtSelect(t, table, "id = ? or id = ?", []interface{}{2, 10001}, "c", "d")
-	testShard_StmtSelect(t, table, "id = ? and id = ?", []interface{}{2, 10001})
-	testShard_StmtSelect(t, table, "id in (?, ?, ?)", []interface{}{0, 10000, 10001}, "a", "b", "d")
-	testShard_StmtSelect(t, table, "id < ? or id >= ?", []interface{}{1, 10000}, "a", "b", "d")
-	testShard_StmtSelect(t, table, "id > ? and id <= ?", []interface{}{1, 10000}, "b", "c")
-	testShard_StmtSelect(t, table, "id < ? and id >= ?", []interface{}{1, 10000})
+	testShardStmtSelect(t, table, "id = ?", []interface{}{2}, "c")
+	testShardStmtSelect(t, table, "id = ? or id = ?", []interface{}{2, 10001}, "c", "d")
+	testShardStmtSelect(t, table, "id = ? and id = ?", []interface{}{2, 10001})
+	testShardStmtSelect(t, table, "id in (?, ?, ?)", []interface{}{0, 10000, 10001}, "a", "b", "d")
+	testShardStmtSelect(t, table, "id < ? or id >= ?", []interface{}{1, 10000}, "a", "b", "d")
+	testShardStmtSelect(t, table, "id > ? and id <= ?", []interface{}{1, 10000}, "b", "c")
+	testShardStmtSelect(t, table, "id < ? and id >= ?", []interface{}{1, 10000})
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/araddon/qlbridge/vm"
 	"math"
 	"sort"
 	"strconv"
@@ -19,6 +18,7 @@ import (
 	"github.com/araddon/dataux/vendor/mixer/router"
 	"github.com/araddon/dataux/vendor/mixer/sqlparser"
 	u "github.com/araddon/gou"
+	"github.com/araddon/qlbridge/vm"
 )
 
 /*
@@ -145,6 +145,22 @@ func (m *HandlerSharded) chooseCommand(writer models.ResultWriter, req *models.R
 	return nil
 }
 
+func (m *HandlerSharded) createSqlVm(sql string) (sqlVm *vm.SqlVm, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("could not parse query %s error %v", sql, e)
+			u.Error(err)
+		}
+	}()
+	sqlVm, err = vm.NewSqlVm(sql)
+	if err != nil {
+		u.Errorf("could not parse sql vm %v", err)
+	} else {
+		u.Debugf("got sql vm: %T", sqlVm)
+	}
+	return
+}
+
 func (m *HandlerSharded) handleQuery(sql string) (err error) {
 	u.Debugf("in handleQuery: %v", sql)
 	if !m.conf.SupressRecover {
@@ -167,12 +183,8 @@ func (m *HandlerSharded) handleQuery(sql string) (err error) {
 		u.Error(err)
 		return fmt.Errorf(`parse sql "%s" error`, sql)
 	}
-	sqlVm, err := vm.NewSqlVm(sql)
-	if err != nil {
-		u.Errorf("could not parse sql vm %v", err)
-	} else {
-		u.Debugf("got sql vm: %T", sqlVm)
-	}
+	// Just temp, ensure it parses
+	m.createSqlVm(sql)
 
 	u.Debugf("handleQuery: %T ", stmt)
 	switch v := stmt.(type) {
@@ -797,6 +809,7 @@ func (m *HandlerSharded) getShardList(stmt sqlparser.Statement, bindVars map[str
 		return nil, mysql.NewDefaultError(mysql.ER_NO_DB_ERROR)
 	}
 
+	u.Infof("getShardList: %v", m.schema.rule)
 	ns, err := router.GetStmtShardList(stmt, m.schema.rule, bindVars)
 	if err != nil {
 		return nil, err
@@ -864,7 +877,7 @@ func (m *HandlerSharded) getShardConns(isSelect bool, stmt sqlparser.Statement, 
 	} else if nodes == nil {
 		return nil, nil
 	}
-
+	u.Infof("Get Shard List: %v  %#v", nodes, stmt)
 	conns := make([]*client.SqlConn, 0, len(nodes))
 
 	var co *client.SqlConn
