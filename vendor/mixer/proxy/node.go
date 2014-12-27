@@ -14,16 +14,19 @@ const (
 	Slave  = "slave"
 )
 
+// Node describes a backend server endpoint and is responsible for
+// - creating
 type Node struct {
 	sync.Mutex
 
-	listener *MysqlListener
+	//listener *MysqlListener
 
 	cfg *models.BackendConfig
 
-	//running master db
-	db *client.DB
-
+	// client.DB's are connection managers
+	// each client.DB represents a server/address/database combo
+	// and its GetConn() will return a pooled connection to db
+	db     *client.DB
 	master *client.DB
 	slave  *client.DB
 
@@ -64,7 +67,7 @@ func (n *Node) getMasterConn() (*client.SqlConn, error) {
 	if db == nil {
 		return nil, fmt.Errorf("master is down")
 	}
-	u.Debugf("about to GetConn:   client.SqlConn")
+	//u.Debugf("about to GetConn:   client.SqlConn")
 	return db.GetConn()
 }
 
@@ -214,104 +217,4 @@ func (n *Node) downSlave() error {
 	}
 
 	return nil
-}
-
-func (m *MysqlListener) UpMaster(node string, addr string) error {
-	n := m.getNode(node)
-	if n == nil {
-		return fmt.Errorf("invalid node %s", node)
-	}
-
-	return n.upMaster(addr)
-}
-
-func (m *MysqlListener) UpSlave(node string, addr string) error {
-	n := m.getNode(node)
-	if n == nil {
-		return fmt.Errorf("invalid node %s", node)
-	}
-
-	return n.upSlave(addr)
-}
-func (m *MysqlListener) DownMaster(node string) error {
-	n := m.getNode(node)
-	if n == nil {
-		return fmt.Errorf("invalid node %s", node)
-	}
-	n.db = nil
-	return n.downMaster()
-}
-
-func (m *MysqlListener) DownSlave(node string) error {
-	n := m.getNode(node)
-	if n == nil {
-		return fmt.Errorf("invalid node [%s].", node)
-	}
-	return n.downSlave()
-}
-
-func (m *MysqlListener) getNode(name string) *Node {
-	return m.nodes[name]
-}
-
-func (m *MysqlListener) parseNodes() error {
-	cfg := m.cfg
-	m.nodes = make(map[string]*Node)
-
-	for _, be := range cfg.Backends {
-		if be.BackendType == "" {
-			for _, schemaConf := range m.cfg.Schemas {
-				for _, bename := range schemaConf.Backends {
-					if bename == be.Name {
-						be.BackendType = schemaConf.BackendType
-					}
-				}
-			}
-		}
-		if be.BackendType == ListenerType {
-			if _, ok := m.nodes[be.Name]; ok {
-				return fmt.Errorf("duplicate node [%s].", be.Name)
-			}
-
-			n, err := m.parseNode(be)
-			if err != nil {
-				return err
-			}
-
-			u.Infof("adding node: [%s]", be.String())
-			m.nodes[be.Name] = n
-		}
-	}
-
-	return nil
-}
-
-func (m *MysqlListener) parseNode(cfg *models.BackendConfig) (*Node, error) {
-	n := new(Node)
-	n.listener = m
-	n.cfg = cfg
-
-	n.downAfterNoAlive = time.Duration(cfg.DownAfterNoAlive) * time.Second
-
-	if len(cfg.Master) == 0 {
-		return nil, fmt.Errorf("must setting master MySQL node.")
-	}
-
-	var err error
-	if n.master, err = n.openDB(cfg.Master); err != nil {
-		return nil, err
-	}
-
-	n.db = n.master
-
-	if len(cfg.Slave) > 0 {
-		if n.slave, err = n.openDB(cfg.Slave); err != nil {
-			u.Errorf("open db error", err)
-			n.slave = nil
-		}
-	}
-
-	go n.run()
-
-	return n, nil
 }

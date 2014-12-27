@@ -2,10 +2,15 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/araddon/dataux/vendor/mixer/hack"
-	. "github.com/araddon/dataux/vendor/mixer/mysql"
 	"strconv"
+
+	"github.com/araddon/dataux/pkg/models"
+	"github.com/araddon/dataux/vendor/mixer/hack"
+	"github.com/araddon/dataux/vendor/mixer/mysql"
+	u "github.com/araddon/gou"
 )
+
+var _ = u.EMPTY
 
 func formatValue(value interface{}) ([]byte, error) {
 	switch v := value.(type) {
@@ -42,29 +47,29 @@ func formatValue(value interface{}) ([]byte, error) {
 	}
 }
 
-func formatField(field *Field, value interface{}) error {
+func formatField(field *mysql.Field, value interface{}) error {
 	switch value.(type) {
 	case int8, int16, int32, int64, int:
 		field.Charset = 63
-		field.Type = MYSQL_TYPE_LONGLONG
-		field.Flag = BINARY_FLAG | NOT_NULL_FLAG
+		field.Type = mysql.MYSQL_TYPE_LONGLONG
+		field.Flag = mysql.BINARY_FLAG | mysql.NOT_NULL_FLAG
 	case uint8, uint16, uint32, uint64, uint:
 		field.Charset = 63
-		field.Type = MYSQL_TYPE_LONGLONG
-		field.Flag = BINARY_FLAG | NOT_NULL_FLAG | UNSIGNED_FLAG
+		field.Type = mysql.MYSQL_TYPE_LONGLONG
+		field.Flag = mysql.BINARY_FLAG | mysql.NOT_NULL_FLAG | mysql.UNSIGNED_FLAG
 	case string, []byte:
 		field.Charset = 33
-		field.Type = MYSQL_TYPE_VAR_STRING
+		field.Type = mysql.MYSQL_TYPE_VAR_STRING
 	default:
 		return fmt.Errorf("unsupport type %T for resultset", value)
 	}
 	return nil
 }
 
-func (c *Conn) buildResultset(names []string, values [][]interface{}) (*Resultset, error) {
-	r := new(Resultset)
+func buildResultset(names []string, values [][]interface{}) (*mysql.Resultset, error) {
+	r := new(mysql.Resultset)
 
-	r.Fields = make([]*Field, len(names))
+	r.Fields = make([]*mysql.Field, len(names))
 
 	var b []byte
 	var err error
@@ -77,7 +82,7 @@ func (c *Conn) buildResultset(names []string, values [][]interface{}) (*Resultse
 		var row []byte
 		for j, value := range vs {
 			if i == 0 {
-				field := &Field{}
+				field := &mysql.Field{}
 				r.Fields[j] = field
 				field.Name = hack.Slice(names[j])
 
@@ -91,7 +96,7 @@ func (c *Conn) buildResultset(names []string, values [][]interface{}) (*Resultse
 				return nil, err
 			}
 
-			row = append(row, PutLengthEncodedString(b)...)
+			row = append(row, mysql.PutLengthEncodedString(b)...)
 		}
 
 		r.RowDatas = append(r.RowDatas, row)
@@ -100,10 +105,22 @@ func (c *Conn) buildResultset(names []string, values [][]interface{}) (*Resultse
 	return r, nil
 }
 
-func (c *Conn) writeResultset(status uint16, r *Resultset) error {
+func (c *Conn) WriteResult(r models.Result) error {
+	if mysqlRes, ok := r.(*mysql.Result); ok {
+		return c.writeHandlerResult(mysqlRes.Status, mysqlRes.Resultset)
+	}
+	u.Errorf("unknown type?:  T:%T   v:%v", r, r)
+	return fmt.Errorf("Unknown result type: %T", r)
+}
+
+func (c *Conn) writeResultset(status uint16, r *mysql.Resultset) error {
+	return c.writeHandlerResult(status, r)
+}
+
+func (c *Conn) writeHandlerResult(status uint16, r *mysql.Resultset) error {
 	c.affectedRows = int64(-1)
 
-	columnLen := PutLengthEncodedInt(uint64(len(r.Fields)))
+	columnLen := mysql.PutLengthEncodedInt(uint64(len(r.Fields)))
 
 	data := make([]byte, 4, 1024)
 

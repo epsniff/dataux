@@ -32,6 +32,10 @@ func (p *PacketIO) ReadPacket() ([]byte, error) {
 	header := []byte{0, 0, 0, 0}
 
 	if _, err := io.ReadFull(p.rb, header); err != nil {
+		if err == io.EOF {
+			u.Errorf("eof on read? %v", err)
+			return nil, err
+		}
 		u.Errorf("read problem? %v", err)
 		return nil, ErrBadConn
 	}

@@ -31,13 +31,11 @@ func LoadConfig(conf string) (*Config, error) {
 
 // Master config
 type Config struct {
-	Addr      string            `json:"addr"`      // net.Conn compatible ip/dns address
-	User      string            `json:"user"`      // user to talk to backend with
-	Password  string            `json:"password"`  // optional pwd for backend
-	LogLevel  string            `json:"log_level"` // [debug,info,error,]
-	Frontends []*ListenerConfig `json:"listeners"` // tcp listener configs
-	Backends  []*BackendConfig  `json:"backends"`  // backend servers (es, mysql etc)
-	Schemas   []*SchemaConfig   `json:"schemas"`   // virtual schema
+	SupressRecover bool              `json:"supress_recover"` // do we recover?
+	LogLevel       string            `json:"log_level"`       // [debug,info,error,]
+	Frontends      []*ListenerConfig `json:"frontends"`       // tcp listener configs
+	Backends       []*BackendConfig  `json:"backends"`        // backend servers (es, mysql etc)
+	Schemas        []*SchemaConfig   `json:"schemas"`         // virtual schema
 }
 
 // Backends are storage/database/servers/csvfiles
@@ -58,11 +56,13 @@ func (m *BackendConfig) String() string {
 	return fmt.Sprintf("<backendconf %s type=%s />", m.Name, m.BackendType)
 }
 
+// Frontend inbound protocol/transport
 type ListenerConfig struct {
-	Type        string      `json:"type"` // [mysql,mongo,mc,etc]
-	DB          string      `json:"db"`
-	Backends    []string    `json:"backends"`
-	RulesConifg RulesConfig `json:"rules"`
+	Type     string `json:"type"`     // [mysql,mongo,mc,etc]
+	DB       string `json:"db"`       // db name
+	Addr     string `json:"addr"`     // net.Conn compatible ip/dns address
+	User     string `json:"user"`     // user to talk to backend with
+	Password string `json:"password"` // optional pwd for backend
 }
 
 type SchemaConfig struct {
@@ -70,6 +70,10 @@ type SchemaConfig struct {
 	DB          string      `json:"db"`
 	Backends    []string    `json:"backends"`
 	RulesConifg RulesConfig `json:"rules"`
+}
+
+func (m *SchemaConfig) String() string {
+	return fmt.Sprintf("<schemaconf db=%s type=%s backends=%v />", m.DB, m.BackendType, m.Backends)
 }
 
 type RulesConfig struct {

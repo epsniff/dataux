@@ -6,7 +6,7 @@ import (
 )
 
 // no copy to change slice to string
-// use your own risk
+// use at your own risk
 func String(b []byte) (s string) {
 	pbytes := (*reflect.SliceHeader)(unsafe.Pointer(&b))
 	pstring := (*reflect.StringHeader)(unsafe.Pointer(&s))

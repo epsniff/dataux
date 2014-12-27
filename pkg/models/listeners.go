@@ -10,25 +10,33 @@ var (
 	_ = u.EMPTY
 
 	listenerMu    sync.Mutex
-	listenerFuncs = make(map[string]ListenerInit)
+	listenerFuncs = make(map[string]ListenerAndHandler)
 )
 
+// A listener is a protocol specific, and transport specific
+//  reader of requests which will be routed to a handler
 type Listener interface {
-	Run(stop chan bool) error
+	// Blocking runner
+	Run(handler Handler, stop chan bool) error
 	Close() error
 }
 
 //type func(*models.Config) (models.Listener, error)
 type ListenerInit func(*ListenerConfig, *Config) (Listener, error)
 
-func ListenerRegister(name string, fn ListenerInit) {
+func ListenerRegister(name string, fn ListenerInit, handler Handler) {
 	listenerMu.Lock()
 	defer listenerMu.Unlock()
 	name = strings.ToLower(name)
 	u.Infof("registering listner [%s] ", name)
-	listenerFuncs[name] = fn
+	listenerFuncs[name] = ListenerAndHandler{fn, handler}
 }
 
-func Listeners() map[string]ListenerInit {
+func Listeners() map[string]ListenerAndHandler {
 	return listenerFuncs
+}
+
+type ListenerAndHandler struct {
+	ListenerInit
+	Handler
 }

@@ -2,19 +2,19 @@ package proxy
 
 import (
 	"github.com/araddon/dataux/vendor/mixer/client"
-	. "github.com/araddon/dataux/vendor/mixer/mysql"
+	"github.com/araddon/dataux/vendor/mixer/mysql"
 )
 
 func (c *Conn) isInTransaction() bool {
-	return c.status&SERVER_STATUS_IN_TRANS > 0
+	return c.status&mysql.SERVER_STATUS_IN_TRANS > 0
 }
 
 func (c *Conn) isAutoCommit() bool {
-	return c.status&SERVER_STATUS_AUTOCOMMIT > 0
+	return c.status&mysql.SERVER_STATUS_AUTOCOMMIT > 0
 }
 
 func (c *Conn) handleBegin() error {
-	c.status |= SERVER_STATUS_IN_TRANS
+	c.status |= mysql.SERVER_STATUS_IN_TRANS
 	return c.writeOK(nil)
 }
 
@@ -35,7 +35,7 @@ func (c *Conn) handleRollback() (err error) {
 }
 
 func (c *Conn) commit() (err error) {
-	c.status &= ^SERVER_STATUS_IN_TRANS
+	c.status &= ^mysql.SERVER_STATUS_IN_TRANS
 
 	for _, co := range c.txConns {
 		if e := co.Commit(); e != nil {
@@ -50,7 +50,7 @@ func (c *Conn) commit() (err error) {
 }
 
 func (c *Conn) rollback() (err error) {
-	c.status &= ^SERVER_STATUS_IN_TRANS
+	c.status &= ^mysql.SERVER_STATUS_IN_TRANS
 
 	for _, co := range c.txConns {
 		if e := co.Rollback(); e != nil {

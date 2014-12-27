@@ -1,30 +1,51 @@
 package proxy
 
 import (
-	"github.com/araddon/dataux/pkg/models"
-	"github.com/araddon/dataux/vendor/mixer/client"
-	u "github.com/araddon/gou"
-
+	"flag"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/araddon/dataux/pkg/models"
+	"github.com/araddon/dataux/vendor/mixer/client"
+	u "github.com/araddon/gou"
+	"github.com/bmizerany/assert"
 )
 
-var _ = u.EMPTY
-var testServerOnce sync.Once
-var testListener *MysqlListener
-var testDBOnce sync.Once
-var testDB *client.DB
+var (
+	_              = u.EMPTY
+	testServerOnce sync.Once
+	testListener   *testListenerWraper
+	testHandler    *HandlerSharded
+	testDBOnce     sync.Once
+	testDB         *client.DB
+	verbose        bool
+)
 
 func init() {
-	u.SetupLogging("debug")
-	u.SetColorOutput()
+	flag.BoolVar(&verbose, "vv", false, "verbose tests")
+	flag.Parse()
+	if verbose {
+		u.SetupLogging("debug")
+		u.SetColorOutput()
+	}
 }
 
 var testConfigData = `
 
-addr : "127.0.0.1:4000"
-user : root
+supress_recover: true
+
+frontends [
+  {
+    name : mysql 
+    type : "mysql"
+    addr : "127.0.0.1:4000"
+    user : root
+    #password : 
+  }
+]
+
+
 
 backends [
   {
@@ -85,21 +106,28 @@ schemas : [
 ]
 `
 
-func newTestServer(t *testing.T) *MysqlListener {
+type testListenerWraper struct {
+	*MysqlListener
+	nodes map[string]*Node
+}
+
+func newTestServer(t *testing.T) *testListenerWraper {
 	f := func() {
 		cfg, err := models.LoadConfig(testConfigData)
-		if err != nil {
-			t.Fatal(err.Error())
-		}
+		assert.Tf(t, err == nil, "must load config without err: %v", err)
 
-		testListener, err = NewMysqlListener(cfg)
-		if err != nil {
-			t.Fatal(err)
-		}
+		myl, err := NewMysqlListener(cfg.Frontends[0], cfg)
+		assert.Tf(t, err == nil, "must create listener without err: %v", err)
+		handler, err := NewHandlerSharded(cfg)
+		assert.Tf(t, err == nil, "must create handler without err: %v", err)
+		testHandler = handler.(*HandlerSharded)
 
-		go testListener.Run(make(chan bool))
+		testListener = &testListenerWraper{myl, testHandler.nodes}
 
-		time.Sleep(1 * time.Second)
+		go testListener.Run(testHandler, make(chan bool))
+
+		// delay to ensure we have time to connect
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	testServerOnce.Do(f)
@@ -114,9 +142,7 @@ func newTestDB(t *testing.T) *client.DB {
 		var err error
 		testDB, err = client.Open("127.0.0.1:4000", "root", "", "mixer")
 
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.Tf(t, err == nil, "must not err: %v", err)
 
 		testDB.SetMaxIdleConnNum(4)
 	}

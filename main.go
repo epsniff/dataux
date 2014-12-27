@@ -32,19 +32,27 @@ func main() {
 	u.SetupLogging(*logLevel)
 	u.SetColorIfTerminal()
 
-	models.ListenerRegister(mysqlproxy.ListenerType, mysqlproxy.ListenerInit)
-
 	// get config
 	conf, err := models.LoadConfigFromFile(*configFile)
 	if err != nil {
-		u.Errorf(err.Error())
-		return
+		u.Errorf("Could not load config: %v", err)
+		os.Exit(1)
 	}
+	mysqlShardedHandler, err := mysqlproxy.NewHandlerSharded(conf)
+	if err != nil {
+		u.Errorf("Could not create handlers: %v", err)
+		os.Exit(1)
+	}
+	// Load our Frontend Listener's
+	models.ListenerRegister(mysqlproxy.ListenerType,
+		mysqlproxy.ListenerInit,
+		mysqlShardedHandler,
+	)
 
 	var svr *proxy.Server
 	svr, err = proxy.NewServer(conf)
 	if err != nil {
-		u.Errorf(err.Error())
+		u.Errorf("%v", err)
 		return
 	}
 

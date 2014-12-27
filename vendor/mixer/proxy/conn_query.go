@@ -2,207 +2,212 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/araddon/dataux/vendor/mixer/client"
-	"github.com/araddon/dataux/vendor/mixer/hack"
-	. "github.com/araddon/dataux/vendor/mixer/mysql"
-	"github.com/araddon/dataux/vendor/mixer/router"
-	"github.com/araddon/dataux/vendor/mixer/sqlparser"
 	"strconv"
-	"strings"
-	"sync"
+	//"strings"
+
+	//"github.com/araddon/dataux/vendor/mixer/client"
+	"github.com/araddon/dataux/vendor/mixer/hack"
+	"github.com/araddon/dataux/vendor/mixer/mysql"
+	"github.com/araddon/dataux/vendor/mixer/sqlparser"
+	u "github.com/araddon/gou"
 )
 
-func (c *Conn) handleQuery(sql string) (err error) {
-	defer func() {
-		if e := recover(); e != nil {
-			err = fmt.Errorf("execute %s error %v", sql, e)
-			return
-		}
-	}()
+var _ = u.EMPTY
 
-	sql = strings.TrimRight(sql, ";")
+// func (c *Conn) handleQuery(sql string) (err error) {
+// 	defer func() {
+// 		if e := recover(); e != nil {
+// 			err = fmt.Errorf("handle query %s error %v", sql, e)
+// 			return
+// 		}
+// 	}()
 
-	var stmt sqlparser.Statement
-	stmt, err = sqlparser.Parse(sql)
-	if err != nil {
-		return fmt.Errorf(`parse sql "%s" error`, sql)
-	}
+// 	sql = strings.TrimRight(sql, ";")
 
-	switch v := stmt.(type) {
-	case *sqlparser.Select:
-		return c.handleSelect(v, sql, nil)
-	case *sqlparser.Insert:
-		return c.handleExec(stmt, sql, nil)
-	case *sqlparser.Update:
-		return c.handleExec(stmt, sql, nil)
-	case *sqlparser.Delete:
-		return c.handleExec(stmt, sql, nil)
-	case *sqlparser.Replace:
-		return c.handleExec(stmt, sql, nil)
-	case *sqlparser.Set:
-		return c.handleSet(v)
-	case *sqlparser.Begin:
-		return c.handleBegin()
-	case *sqlparser.Commit:
-		return c.handleCommit()
-	case *sqlparser.Rollback:
-		return c.handleRollback()
-	case *sqlparser.SimpleSelect:
-		return c.handleSimpleSelect(sql, v)
-	case *sqlparser.Show:
-		return c.handleShow(sql, v)
-	case *sqlparser.Admin:
-		return c.handleAdmin(v)
-	default:
-		return fmt.Errorf("statement %T not support now", stmt)
-	}
+// 	var stmt sqlparser.Statement
+// 	stmt, err = sqlparser.Parse(sql)
+// 	if err != nil {
+// 		return fmt.Errorf(`parse sql "%s" error`, sql)
+// 	}
 
-	return nil
-}
+// 	switch v := stmt.(type) {
+// 	case *sqlparser.Select:
+// 		return c.handleSelect(v, sql, nil)
+// 	case *sqlparser.Insert:
+// 		return c.handleExec(stmt, sql, nil)
+// 	case *sqlparser.Update:
+// 		return c.handleExec(stmt, sql, nil)
+// 	case *sqlparser.Delete:
+// 		return c.handleExec(stmt, sql, nil)
+// 	case *sqlparser.Replace:
+// 		return c.handleExec(stmt, sql, nil)
+// 	case *sqlparser.Set:
+// 		return c.handleSet(v)
+// 	case *sqlparser.Begin:
+// 		return c.handleBegin()
+// 	case *sqlparser.Commit:
+// 		return c.handleCommit()
+// 	case *sqlparser.Rollback:
+// 		return c.handleRollback()
+// 	case *sqlparser.SimpleSelect:
+// 		return c.handleSimpleSelect(sql, v)
+// 	case *sqlparser.Show:
+// 		return c.handleShow(sql, v)
+// 	case *sqlparser.Admin:
+// 		return c.handleAdmin(v)
+// 	default:
+// 		return fmt.Errorf("statement %T not support now", stmt)
+// 	}
 
-func (c *Conn) getShardList(stmt sqlparser.Statement, bindVars map[string]interface{}) ([]*Node, error) {
-	if c.schema == nil {
-		return nil, NewDefaultError(ER_NO_DB_ERROR)
-	}
+// 	return nil
+// }
 
-	ns, err := router.GetStmtShardList(stmt, c.schema.rule, bindVars)
-	if err != nil {
-		return nil, err
-	}
+// func (c *Conn) getShardList(stmt sqlparser.Statement, bindVars map[string]interface{}) ([]*Node, error) {
 
-	if len(ns) == 0 {
-		return nil, nil
-	}
+// 	if c.schema == nil {
+// 		return nil, mysql.NewDefaultError(mysql.ER_NO_DB_ERROR)
+// 	}
 
-	n := make([]*Node, 0, len(ns))
-	for _, name := range ns {
-		n = append(n, c.listener.getNode(name))
-	}
-	return n, nil
-}
+// 	ns, err := router.GetStmtShardList(stmt, c.schema.rule, bindVars)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-func (c *Conn) getConn(n *Node, isSelect bool) (co *client.SqlConn, err error) {
-	if !c.needBeginTx() {
-		if isSelect {
-			co, err = n.getSelectConn()
-		} else {
-			co, err = n.getMasterConn()
-		}
-		if err != nil {
-			return
-		}
-	} else {
-		var ok bool
-		c.Lock()
-		co, ok = c.txConns[n]
-		c.Unlock()
+// 	if len(ns) == 0 {
+// 		return nil, nil
+// 	}
 
-		if !ok {
-			if co, err = n.getMasterConn(); err != nil {
-				return
-			}
+// 	n := make([]*Node, 0, len(ns))
+// 	for _, name := range ns {
+// 		n = append(n, c.listener.getNode(name))
+// 	}
+// 	return n, nil
+// }
 
-			if err = co.Begin(); err != nil {
-				return
-			}
+// func (c *Conn) getConn(n *Node, isSelect bool) (co *client.SqlConn, err error) {
+// 	if !c.needBeginTx() {
+// 		if isSelect {
+// 			co, err = n.getSelectConn()
+// 		} else {
+// 			co, err = n.getMasterConn()
+// 		}
+// 		if err != nil {
+// 			return
+// 		}
+// 	} else {
+// 		var ok bool
+// 		c.Lock()
+// 		co, ok = c.txConns[n]
+// 		c.Unlock()
 
-			c.Lock()
-			c.txConns[n] = co
-			c.Unlock()
-		}
-	}
+// 		if !ok {
+// 			if co, err = n.getMasterConn(); err != nil {
+// 				return
+// 			}
 
-	//todo, set conn charset, etc...
-	if err = co.UseDB(c.schema.db); err != nil {
-		return
-	}
+// 			if err = co.Begin(); err != nil {
+// 				return
+// 			}
 
-	if err = co.SetCharset(c.charset); err != nil {
-		return
-	}
+// 			c.Lock()
+// 			c.txConns[n] = co
+// 			c.Unlock()
+// 		}
+// 	}
 
-	return
-}
+// 	//todo, set conn charset, etc...
+// 	if err = co.UseDB(c.schema.db); err != nil {
+// 		return
+// 	}
 
-func (c *Conn) getShardConns(isSelect bool, stmt sqlparser.Statement, bindVars map[string]interface{}) ([]*client.SqlConn, error) {
-	nodes, err := c.getShardList(stmt, bindVars)
-	if err != nil {
-		return nil, err
-	} else if nodes == nil {
-		return nil, nil
-	}
+// 	if err = co.SetCharset(c.charset); err != nil {
+// 		return
+// 	}
 
-	conns := make([]*client.SqlConn, 0, len(nodes))
+// 	return
+// }
 
-	var co *client.SqlConn
-	for _, n := range nodes {
-		co, err = c.getConn(n, isSelect)
-		if err != nil {
-			break
-		}
+// func (c *Conn) getShardConns(isSelect bool, stmt sqlparser.Statement, bindVars map[string]interface{}) ([]*client.SqlConn, error) {
 
-		conns = append(conns, co)
-	}
+// 	nodes, err := c.getShardList(stmt, bindVars)
+// 	if err != nil {
+// 		return nil, err
+// 	} else if nodes == nil {
+// 		return nil, nil
+// 	}
 
-	return conns, err
-}
+// 	conns := make([]*client.SqlConn, 0, len(nodes))
 
-func (c *Conn) executeInShard(conns []*client.SqlConn, sql string, args []interface{}) ([]*Result, error) {
-	var wg sync.WaitGroup
-	wg.Add(len(conns))
+// 	var co *client.SqlConn
+// 	for _, n := range nodes {
+// 		co, err = c.getConn(n, isSelect)
+// 		if err != nil {
+// 			break
+// 		}
 
-	rs := make([]interface{}, len(conns))
+// 		conns = append(conns, co)
+// 	}
 
-	f := func(rs []interface{}, i int, co *client.SqlConn) {
-		r, err := co.Execute(sql, args...)
-		if err != nil {
-			rs[i] = err
-		} else {
-			rs[i] = r
-		}
+// 	return conns, err
+// }
 
-		wg.Done()
-	}
+// func (c *Conn) executeInShard(conns []*client.SqlConn, sql string, args []interface{}) ([]*mysql.Result, error) {
+// 	var wg sync.WaitGroup
+// 	wg.Add(len(conns))
 
-	for i, co := range conns {
-		go f(rs, i, co)
-	}
+// 	rs := make([]interface{}, len(conns))
 
-	wg.Wait()
+// 	f := func(rs []interface{}, i int, co *client.SqlConn) {
+// 		r, err := co.Execute(sql, args...)
+// 		if err != nil {
+// 			rs[i] = err
+// 		} else {
+// 			rs[i] = r
+// 		}
 
-	var err error
-	r := make([]*Result, len(conns))
-	for i, v := range rs {
-		if e, ok := v.(error); ok {
-			err = e
-			break
-		}
-		r[i] = rs[i].(*Result)
-	}
+// 		wg.Done()
+// 	}
 
-	return r, err
-}
+// 	for i, co := range conns {
+// 		go f(rs, i, co)
+// 	}
 
-func (c *Conn) closeShardConns(conns []*client.SqlConn, rollback bool) {
-	if c.isInTransaction() {
-		return
-	}
+// 	wg.Wait()
 
-	for _, co := range conns {
-		if rollback {
-			co.Rollback()
-		}
+// 	var err error
+// 	r := make([]*mysql.Result, len(conns))
+// 	for i, v := range rs {
+// 		if e, ok := v.(error); ok {
+// 			err = e
+// 			break
+// 		}
+// 		r[i] = rs[i].(*mysql.Result)
+// 	}
 
-		co.Close()
-	}
-}
+// 	return r, err
+// }
 
-func (c *Conn) newEmptyResultset(stmt *sqlparser.Select) *Resultset {
-	r := new(Resultset)
-	r.Fields = make([]*Field, len(stmt.SelectExprs))
+// func (c *Conn) closeShardConns(conns []*client.SqlConn, rollback bool) {
+// 	if c.isInTransaction() {
+// 		return
+// 	}
+
+// 	for _, co := range conns {
+// 		if rollback {
+// 			co.Rollback()
+// 		}
+
+// 		co.Close()
+// 	}
+// }
+
+func (c *Conn) newEmptyResultset(stmt *sqlparser.Select) *mysql.Resultset {
+
+	r := new(mysql.Resultset)
+	r.Fields = make([]*mysql.Field, len(stmt.SelectExprs))
 
 	for i, expr := range stmt.SelectExprs {
-		r.Fields[i] = &Field{}
+		r.Fields[i] = &mysql.Field{}
 		switch e := expr.(type) {
 		case *sqlparser.StarExpr:
 			r.Fields[i].Name = []byte("*")
@@ -219,7 +224,7 @@ func (c *Conn) newEmptyResultset(stmt *sqlparser.Select) *Resultset {
 	}
 
 	r.Values = make([][]interface{}, 0)
-	r.RowDatas = make([]RowData, 0)
+	r.RowDatas = make([]mysql.RowData, 0)
 
 	return r
 }
@@ -234,101 +239,103 @@ func makeBindVars(args []interface{}) map[string]interface{} {
 	return bindVars
 }
 
-func (c *Conn) handleSelect(stmt *sqlparser.Select, sql string, args []interface{}) error {
+// func (c *Conn) handleSelect(stmt *sqlparser.Select, sql string, args []interface{}) error {
 
-	bindVars := makeBindVars(args)
+// 	bindVars := makeBindVars(args)
 
-	conns, err := c.getShardConns(true, stmt, bindVars)
-	if err != nil {
-		return err
-	} else if conns == nil {
-		r := c.newEmptyResultset(stmt)
-		return c.writeResultset(c.status, r)
-	}
+// 	sqlConns, err := c.getShardConns(true, stmt, bindVars)
+// 	if err != nil {
+// 		return err
+// 	} else if sqlConns == nil {
+// 		r := c.newEmptyResultset(stmt)
+// 		return c.writeResultset(c.status, r)
+// 	}
 
-	var rs []*Result
+// 	var rs []*mysql.Result
 
-	rs, err = c.executeInShard(conns, sql, args)
+// 	rs, err = c.executeInShard(sqlConns, sql, args)
 
-	c.closeShardConns(conns, false)
+// 	c.closeShardConns(sqlConns, false)
 
-	if err == nil {
-		err = c.mergeSelectResult(rs, stmt)
-	}
+// 	if err == nil {
+// 		err = c.mergeSelectResult(rs, stmt)
+// 	}
 
-	return err
-}
+// 	return err
+// }
 
-func (c *Conn) beginShardConns(conns []*client.SqlConn) error {
-	if c.isInTransaction() {
-		return nil
-	}
+// func (c *Conn) beginShardConns(conns []*client.SqlConn) error {
+// 	if c.isInTransaction() {
+// 		return nil
+// 	}
 
-	for _, co := range conns {
-		if err := co.Begin(); err != nil {
-			return err
-		}
-	}
+// 	for _, co := range conns {
+// 		if err := co.Begin(); err != nil {
+// 			return err
+// 		}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
-func (c *Conn) commitShardConns(conns []*client.SqlConn) error {
-	if c.isInTransaction() {
-		return nil
-	}
+// func (c *Conn) commitShardConns(conns []*client.SqlConn) error {
+// 	if c.isInTransaction() {
+// 		return nil
+// 	}
 
-	for _, co := range conns {
-		if err := co.Commit(); err != nil {
-			return err
-		}
-	}
+// 	for _, co := range conns {
+// 		if err := co.Commit(); err != nil {
+// 			return err
+// 		}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
-func (c *Conn) handleExec(stmt sqlparser.Statement, sql string, args []interface{}) error {
-	bindVars := makeBindVars(args)
+// func (c *Conn) handleExec(stmt sqlparser.Statement, sql string, args []interface{}) error {
 
-	conns, err := c.getShardConns(false, stmt, bindVars)
-	if err != nil {
-		return err
-	} else if conns == nil {
-		return c.writeOK(nil)
-	}
+// 	bindVars := makeBindVars(args)
 
-	var rs []*Result
+// 	conns, err := c.getShardConns(false, stmt, bindVars)
+// 	if err != nil {
+// 		return err
+// 	} else if conns == nil {
+// 		return c.writeOK(nil)
+// 	}
 
-	if len(conns) == 1 {
-		rs, err = c.executeInShard(conns, sql, args)
-	} else {
-		//for multi nodes, 2PC simple, begin, exec, commit
-		//if commit error, data maybe corrupt
-		for {
-			if err = c.beginShardConns(conns); err != nil {
-				break
-			}
+// 	var rs []*mysql.Result
 
-			if rs, err = c.executeInShard(conns, sql, args); err != nil {
-				break
-			}
+// 	if len(conns) == 1 {
+// 		rs, err = c.executeInShard(conns, sql, args)
+// 	} else {
+// 		//for multi nodes, 2PC simple, begin, exec, commit
+// 		//if commit error, data maybe corrupt
+// 		for {
+// 			if err = c.beginShardConns(conns); err != nil {
+// 				break
+// 			}
 
-			err = c.commitShardConns(conns)
-			break
-		}
-	}
+// 			if rs, err = c.executeInShard(conns, sql, args); err != nil {
+// 				break
+// 			}
 
-	c.closeShardConns(conns, err != nil)
+// 			err = c.commitShardConns(conns)
+// 			break
+// 		}
+// 	}
 
-	if err == nil {
-		err = c.mergeExecResult(rs)
-	}
+// 	c.closeShardConns(conns, err != nil)
 
-	return err
-}
+// 	if err == nil {
+// 		err = c.mergeExecResult(rs)
+// 	}
 
-func (c *Conn) mergeExecResult(rs []*Result) error {
-	r := new(Result)
+// 	return err
+// }
+
+func (c *Conn) mergeExecResult(rs []*mysql.Result) error {
+
+	r := new(mysql.Result)
 
 	for _, v := range rs {
 		r.Status |= v.Status
@@ -347,11 +354,12 @@ func (c *Conn) mergeExecResult(rs []*Result) error {
 	}
 
 	c.affectedRows = int64(r.AffectedRows)
+	u.Infof("mergeExecResult: %v:%v", r.AffectedRows, c.affectedRows)
 
 	return c.writeOK(r)
 }
 
-func (c *Conn) mergeSelectResult(rs []*Result, stmt *sqlparser.Select) error {
+func (c *Conn) mergeSelectResult(rs []*mysql.Result, stmt *sqlparser.Select) error {
 	r := rs[0].Resultset
 
 	status := c.status | rs[0].Status
@@ -367,23 +375,23 @@ func (c *Conn) mergeSelectResult(rs []*Result, stmt *sqlparser.Select) error {
 		}
 	}
 
-	//to do order by, group by, limit offset
+	//TODO order by, group by, limit offset
 	c.sortSelectResult(r, stmt)
-	//to do, add log here, sort may error because order by key not exist in resultset fields
+	//TODO add log here, sort may error because order by key not exist in resultset fields
 
 	if err := c.limitSelectResult(r, stmt); err != nil {
 		return err
 	}
-
+	u.Infof("mergeSelectResult:  rs(%v) rows?%v", len(rs), r.RowNumber())
 	return c.writeResultset(status, r)
 }
 
-func (c *Conn) sortSelectResult(r *Resultset, stmt *sqlparser.Select) error {
+func (c *Conn) sortSelectResult(r *mysql.Resultset, stmt *sqlparser.Select) error {
 	if stmt.OrderBy == nil {
 		return nil
 	}
 
-	sk := make([]SortKey, len(stmt.OrderBy))
+	sk := make([]mysql.SortKey, len(stmt.OrderBy))
 
 	for i, o := range stmt.OrderBy {
 		sk[i].Name = nstring(o.Expr)
@@ -393,7 +401,7 @@ func (c *Conn) sortSelectResult(r *Resultset, stmt *sqlparser.Select) error {
 	return r.Sort(sk)
 }
 
-func (c *Conn) limitSelectResult(r *Resultset, stmt *sqlparser.Select) error {
+func (c *Conn) limitSelectResult(r *mysql.Resultset, stmt *sqlparser.Select) error {
 	if stmt.Limit == nil {
 		return nil
 	}

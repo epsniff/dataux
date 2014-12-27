@@ -2,10 +2,21 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/araddon/dataux/vendor/mixer/mysql"
 	"reflect"
 	"testing"
+
+	"github.com/araddon/dataux/vendor/mixer/mysql"
+	u "github.com/araddon/gou"
+	//"github.com/bmizerany/assert"
 )
+
+var _ = u.EMPTY
+
+func setupShardDeleteAll(t *testing.T, table string) {
+	conn := newTestDBConn(t)
+	r, _ := conn.Execute(fmt.Sprintf(`delete from %s`, table))
+	u.Warnf("shard cleanup delete %v", r)
+}
 
 func testShard_Insert(t *testing.T, table string, node string, id int, str string) {
 	conn := newTestDBConn(t)
@@ -178,8 +189,12 @@ func TestShard_CreateHashTable(t *testing.T) {
 	}
 }
 
-func TestShard_Hash(t *testing.T) {
+func TestShard_HashDefault(t *testing.T) {
+
 	table := "mixer_test_shard_hash"
+
+	setupShardDeleteAll(t, table)
+
 	testShard_Insert(t, table, "node2", 0, "a")
 	testShard_Insert(t, table, "node3", 1, "b")
 	testShard_Insert(t, table, "node2", 2, "c")
@@ -224,6 +239,8 @@ func testShared_SelectOrderBy(t *testing.T, table string, where string, v [][]in
 
 func TestShard_HashOrderByLimit(t *testing.T) {
 	table := "mixer_test_shard_hash"
+
+	setupShardDeleteAll(t, table)
 
 	testShard_Insert(t, table, "node2", 4, "a")
 	testShard_Insert(t, table, "node3", 5, "a")

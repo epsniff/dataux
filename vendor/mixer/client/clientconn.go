@@ -5,12 +5,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/araddon/dataux/vendor/mixer/mysql"
-	u "github.com/araddon/gou"
-	"github.com/siddontang/go-log/log"
 	"net"
 	"strings"
 	"time"
+
+	"github.com/araddon/dataux/vendor/mixer/mysql"
+	u "github.com/araddon/gou"
 )
 
 var (
@@ -71,7 +71,7 @@ func (c *Conn) ReConnect() error {
 		n = "unix"
 	}
 
-	u.Infof("about to dial db: %v", c.addr)
+	//u.Infof("[client] about to dial db: %v", c.addr)
 	netConn, err := net.Dial(n, c.addr)
 	if err != nil {
 		u.Errorf("error: %v", err)
@@ -81,21 +81,21 @@ func (c *Conn) ReConnect() error {
 	c.conn = netConn
 	c.pkg = mysql.NewPacketIO(netConn)
 
-	u.Infof("calling initial handshake")
+	//u.Infof("[client] calling initial handshake")
 	if err := c.readInitialHandshake(); err != nil {
 		u.Errorf("error: %v", err)
 		c.conn.Close()
 		return err
 	}
 
-	u.Infof("calling auth handshake")
+	//u.Infof("[client] calling auth handshake")
 	if err := c.writeAuthHandshake(); err != nil {
 		u.Errorf("error: %v", err)
 		c.conn.Close()
 
 		return err
 	}
-	u.Infof("get ok")
+	//u.Infof("[client] get ok")
 	if _, err := c.readOK(); err != nil {
 		u.Errorf("error: %v", err)
 		c.conn.Close()
@@ -103,7 +103,7 @@ func (c *Conn) ReConnect() error {
 		return err
 	}
 
-	u.Infof("autocommit?")
+	//u.Infof("[client] autocommit?")
 	//we must always use autocommit
 	if !c.IsAutoCommit() {
 		if _, err := c.exec("set autocommit = 1"); err != nil {
@@ -115,7 +115,7 @@ func (c *Conn) ReConnect() error {
 
 	c.lastPing = time.Now().Unix()
 
-	u.Infof("got connection")
+	u.Infof("[client] got connection to backend : %v", c.addr)
 	return nil
 }
 
@@ -194,7 +194,7 @@ func (c *Conn) readInitialHandshake() error {
 		c.salt = append(c.salt, data[pos:pos+12]...)
 	}
 
-	log.Debug("completed read handshake")
+	//u.Debug("completed read handshake")
 	return nil
 }
 
@@ -363,7 +363,7 @@ func (c *Conn) UseDB(dbName string) error {
 		return nil
 	}
 
-	log.Debug("about to writeCommandStr:  %v %v %v", c.addr, c.db, dbName)
+	u.Debugf("client.conn about to writeCommandStr:  %v %v %v", c.addr, c.db, dbName)
 	if err := c.writeCommandStr(mysql.COM_INIT_DB, dbName); err != nil {
 		u.Errorf("error: %v", err)
 		return err
@@ -651,9 +651,9 @@ func (c *Conn) handleErrorPacket(data []byte) error {
 }
 
 func (c *Conn) readOK() (*mysql.Result, error) {
-	u.Infof("about to readPacket")
+	//u.Infof("about to readPacket")
 	data, err := c.readPacket()
-	u.Infof("readOk?  %q", string(data))
+	//u.Infof("readOk?  %q", string(data))
 	if err != nil {
 		return nil, err
 	}

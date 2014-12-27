@@ -3,59 +3,137 @@ package proxy
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
-	"github.com/araddon/dataux/vendor/mixer/client"
-	"github.com/araddon/dataux/vendor/mixer/hack"
-	"github.com/araddon/dataux/vendor/mixer/mysql"
-	u "github.com/araddon/gou"
+	"io"
 	"net"
 	"runtime"
 	"sync"
-	//"sync/atomic"
+	"sync/atomic"
+
+	"github.com/araddon/dataux/pkg/models"
+	"github.com/araddon/dataux/vendor/mixer/client"
+	"github.com/araddon/dataux/vendor/mixer/mysql"
+	u "github.com/araddon/gou"
 )
+
+// Each new connection gets a connection id
+var baseConnId uint32 = 10000
 
 var DEFAULT_CAPABILITY uint32 = mysql.CLIENT_LONG_PASSWORD | mysql.CLIENT_LONG_FLAG |
 	mysql.CLIENT_CONNECT_WITH_DB | mysql.CLIENT_PROTOCOL_41 |
 	mysql.CLIENT_TRANSACTIONS | mysql.CLIENT_SECURE_CONNECTION
 
-//client <-> proxy
+// Conn serves as a Frontend (inbound listener) on mysql
+// protocol
+//
+//	--> frontend --> handlers --> backend
 type Conn struct {
 	sync.Mutex
 
-	pkg *mysql.PacketIO
-
-	c net.Conn
-
-	listener *MysqlListener
-
-	capability uint32
-
+	pkg          *mysql.PacketIO
+	c            net.Conn
+	listener     *MysqlListener
+	noRecover    bool
+	handler      models.Handler // Handle inbound Requests to be routed to backends
+	capability   uint32
 	connectionId uint32
-
-	status    uint16
-	collation mysql.CollationId
-	charset   string
-
-	user string
-	db   string
-
-	salt []byte
-
-	schema *Schema
-
-	txConns map[*Node]*client.SqlConn
-
-	closed bool
-
+	status       uint16
+	collation    mysql.CollationId
+	charset      string
+	user         string
+	db           string
+	salt         []byte
+	schema       *models.Schema
+	txConns      map[*Node]*client.SqlConn
+	closed       bool
 	lastInsertId int64
 	affectedRows int64
-
-	stmtId uint32
-
-	stmts map[uint32]*Stmt
+	stmtId       uint32
+	stmts        map[uint32]*Stmt
 }
 
-var baseConnId uint32 = 10000
+func newConn(m *MysqlListener, co net.Conn) *Conn {
+	c := new(Conn)
+
+	c.c = co
+
+	c.pkg = mysql.NewPacketIO(co)
+
+	c.listener = m
+	if handlerMaker, ok := c.listener.handler.(models.HandlerSession); ok {
+		c.handler = handlerMaker.Clone(c)
+	} else {
+		u.Warnf("We are not cloning?  %T", c.listener.handler)
+		// not session specific so re-use handler
+		c.handler = c.listener.handler
+	}
+
+	c.noRecover = c.listener.cfg.SupressRecover
+	c.c = co
+	c.pkg.Sequence = 0
+
+	c.connectionId = atomic.AddUint32(&baseConnId, 1)
+
+	c.status = mysql.SERVER_STATUS_AUTOCOMMIT
+
+	c.salt, _ = mysql.RandomBuf(20)
+
+	c.txConns = make(map[*Node]*client.SqlConn)
+
+	c.closed = false
+
+	c.collation = mysql.DEFAULT_COLLATION_ID
+	c.charset = mysql.DEFAULT_CHARSET
+
+	c.stmtId = 0
+	c.stmts = make(map[uint32]*Stmt)
+
+	return c
+}
+
+// Run is a blocking command PER client connection it is called
+// AFTER Handshake()
+func (c *Conn) Run() {
+
+	if !c.noRecover {
+		u.Debugf("running recovery? %v", !c.noRecover)
+		defer func() {
+			r := recover()
+			if err, ok := r.(error); ok {
+				const size = 4096
+				buf := make([]byte, size)
+				buf = buf[:runtime.Stack(buf, false)]
+
+				u.Errorf("%v, %s", err, buf)
+			}
+
+			c.Close()
+		}()
+	} else {
+		u.Debugf("Suppressing recovery? %v", !c.noRecover)
+	}
+
+	for {
+		data, err := c.readPacket()
+
+		if err != nil {
+			return
+		}
+
+		u.Debugf("Run() -> handler.Handle(): %v", string(data))
+		if err := c.handler.Handle(c, &models.Request{Raw: data}); err != nil {
+			u.Errorf("dispatch error %v", err)
+			if err != mysql.ErrBadConn {
+				c.writeError(err)
+			}
+		}
+
+		if c.closed {
+			return
+		}
+
+		c.pkg.Sequence = 0
+	}
+}
 
 func (c *Conn) Handshake() error {
 
@@ -152,6 +230,7 @@ func (c *Conn) writePacket(data []byte) error {
 }
 
 func (c *Conn) readHandshakeResponse() error {
+
 	data, err := c.readPacket()
 
 	if err != nil {
@@ -183,7 +262,7 @@ func (c *Conn) readHandshakeResponse() error {
 	pos++
 	auth := data[pos : pos+authLen]
 
-	checkAuth := mysql.CalcPassword(c.salt, []byte(c.listener.cfg.Password))
+	checkAuth := mysql.CalcPassword(c.salt, []byte(c.listener.feconf.Password))
 
 	if !bytes.Equal(auth, checkAuth) {
 		return mysql.NewDefaultError(mysql.ER_ACCESS_DENIED_ERROR, c.c.RemoteAddr().String(), c.user, "Yes")
@@ -207,87 +286,50 @@ func (c *Conn) readHandshakeResponse() error {
 	return nil
 }
 
-// Run is a blocking command PER client connection
-//
-func (c *Conn) Run() {
-	defer func() {
-		r := recover()
-		if err, ok := r.(error); ok {
-			const size = 4096
-			buf := make([]byte, size)
-			buf = buf[:runtime.Stack(buf, false)]
+// func (c *Conn) dispatch(data []byte) error {
 
-			u.Errorf("%v, %s", err, buf)
-		}
+// 	cmd := data[0]
+// 	data = data[1:]
 
-		c.Close()
-	}()
+// 	u.Debugf("dispatch: %v ", cmd)
+// 	switch cmd {
+// 	case mysql.COM_QUIT:
+// 		c.Close()
+// 		return nil
+// 	case mysql.COM_QUERY:
+// 		return c.handleQuery(hack.String(data))
+// 	case mysql.COM_PING:
+// 		return c.writeOK(nil)
+// 	case mysql.COM_INIT_DB:
+// 		if err := c.useDB(hack.String(data)); err != nil {
+// 			return err
+// 		} else {
+// 			return c.writeOK(nil)
+// 		}
+// 	case mysql.COM_FIELD_LIST:
+// 		return c.handleFieldList(data)
+// 	case mysql.COM_STMT_PREPARE:
+// 		return c.handleStmtPrepare(hack.String(data))
+// 	case mysql.COM_STMT_EXECUTE:
+// 		return c.handleStmtExecute(data)
+// 	case mysql.COM_STMT_CLOSE:
+// 		return c.handleStmtClose(data)
+// 	case mysql.COM_STMT_SEND_LONG_DATA:
+// 		return c.handleStmtSendLongData(data)
+// 	case mysql.COM_STMT_RESET:
+// 		return c.handleStmtReset(data)
+// 	default:
+// 		msg := fmt.Sprintf("command %d not supported now", cmd)
+// 		return mysql.NewError(mysql.ER_UNKNOWN_ERROR, msg)
+// 	}
 
-	for {
-		data, err := c.readPacket()
-
-		if err != nil {
-			return
-		}
-
-		u.Debugf("Run() -> dispatch: %v", string(data))
-		if err := c.dispatch(data); err != nil {
-			u.Errorf("dispatch error %s", err.Error())
-			if err != mysql.ErrBadConn {
-				c.writeError(err)
-			}
-		}
-
-		if c.closed {
-			return
-		}
-
-		c.pkg.Sequence = 0
-	}
-}
-
-func (c *Conn) dispatch(data []byte) error {
-	cmd := data[0]
-	data = data[1:]
-
-	u.Debugf("dispatch: %v ", cmd)
-	switch cmd {
-	case mysql.COM_QUIT:
-		c.Close()
-		return nil
-	case mysql.COM_QUERY:
-		return c.handleQuery(hack.String(data))
-	case mysql.COM_PING:
-		return c.writeOK(nil)
-	case mysql.COM_INIT_DB:
-		if err := c.useDB(hack.String(data)); err != nil {
-			return err
-		} else {
-			return c.writeOK(nil)
-		}
-	case mysql.COM_FIELD_LIST:
-		return c.handleFieldList(data)
-	case mysql.COM_STMT_PREPARE:
-		return c.handleStmtPrepare(hack.String(data))
-	case mysql.COM_STMT_EXECUTE:
-		return c.handleStmtExecute(data)
-	case mysql.COM_STMT_CLOSE:
-		return c.handleStmtClose(data)
-	case mysql.COM_STMT_SEND_LONG_DATA:
-		return c.handleStmtSendLongData(data)
-	case mysql.COM_STMT_RESET:
-		return c.handleStmtReset(data)
-	default:
-		msg := fmt.Sprintf("command %d not supported now", cmd)
-		return mysql.NewError(mysql.ER_UNKNOWN_ERROR, msg)
-	}
-
-	return nil
-}
+// 	return nil
+// }
 
 func (c *Conn) useDB(db string) error {
-	u.Infof("UseDB: %v", db)
-	if s := c.listener.getSchema(db); s == nil {
+	u.Infof("listener connection UseDB: %v", db)
+	if s := c.handler.SchemaUse(db); s == nil {
+		u.Errorf("could not load schema: %v", db)
 		return mysql.NewDefaultError(mysql.ER_BAD_DB_ERROR, db)
 	} else {
 		c.schema = s
@@ -304,6 +346,7 @@ func (c *Conn) writeOK(r *mysql.Result) error {
 
 	data = append(data, mysql.OK_HEADER)
 
+	u.Infof("writeOk: %v", r.AffectedRows)
 	data = append(data, mysql.PutLengthEncodedInt(r.AffectedRows)...)
 	data = append(data, mysql.PutLengthEncodedInt(r.InsertId)...)
 
@@ -311,7 +354,16 @@ func (c *Conn) writeOK(r *mysql.Result) error {
 		data = append(data, byte(r.Status), byte(r.Status>>8))
 		data = append(data, 0, 0)
 	}
-
+	err := c.writePacket(data)
+	if err != nil && err == io.EOF {
+		c.c.Close()
+		u.Errorf("closing conn:  %v", err)
+		return err
+	} else if err != nil {
+		c.c.Close()
+		u.Errorf("closing conn:  %v", err)
+		return err
+	}
 	return c.writePacket(data)
 }
 
@@ -347,4 +399,47 @@ func (c *Conn) writeEOF(status uint16) error {
 	}
 
 	return c.writePacket(data)
+}
+
+func buildSimpleSelectResult(value interface{}, name []byte, asName []byte) (*mysql.Resultset, error) {
+
+	field := &mysql.Field{}
+
+	field.Name = name
+
+	if asName != nil {
+		field.Name = asName
+	}
+
+	field.OrgName = name
+
+	formatField(field, value)
+
+	r := &mysql.Resultset{Fields: []*mysql.Field{field}}
+	row, err := formatValue(value)
+	if err != nil {
+		return nil, err
+	}
+	r.RowDatas = append(r.RowDatas, mysql.PutLengthEncodedString(row))
+
+	return r, nil
+}
+
+func (c *Conn) writeFieldList(status uint16, fs []*mysql.Field) error {
+	c.affectedRows = int64(-1)
+
+	data := make([]byte, 4, 1024)
+
+	for _, v := range fs {
+		data = data[0:4]
+		data = append(data, v.Dump()...)
+		if err := c.writePacket(data); err != nil {
+			return err
+		}
+	}
+
+	if err := c.writeEOF(status); err != nil {
+		return err
+	}
+	return nil
 }
